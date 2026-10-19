@@ -1,8 +1,21 @@
 # StoreStage — Shopify app configuration.
 # Run `npm run config:link` to link this file to your app in the Partner / Dev Dashboard;
 # the CLI fills in client_id, name, application_url and redirect URLs.
-client_id = ""
+client_id = "47e6063c0a7f1580cdfcc45b0232763b"
 name = "StoreStage"
+application_url = "https://storestage-production.up.railway.app"
+embedded = true
+
+[auth]
+redirect_urls = [
+  "https://storestage-production.up.railway.app/auth/callback",
+  "https://storestage-production.up.railway.app/auth/shopify/callback",
+  "https://storestage-production.up.railway.app/api/auth/callback"
+]
+
+[build]
+# Keep `shopify app dev` from rewriting application_url to a temporary tunnel URL.
+automatically_update_urls_on_dev = false
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
