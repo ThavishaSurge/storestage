@@ -1,6 +1,32 @@
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
+-- CreateTable
+CREATE TABLE "Session" (
+    "id" TEXT NOT NULL,
+    "shop" TEXT NOT NULL,
+    "state" TEXT NOT NULL,
+    "isOnline" BOOLEAN NOT NULL DEFAULT false,
+    "scope" TEXT,
+    "expires" TIMESTAMP(3),
+    "accessToken" TEXT NOT NULL,
+    "userId" BIGINT,
+    "firstName" TEXT,
+    "lastName" TEXT,
+    "email" TEXT,
+    "accountOwner" BOOLEAN NOT NULL DEFAULT false,
+    "locale" TEXT,
+    "collaborator" BOOLEAN DEFAULT false,
+    "emailVerified" BOOLEAN DEFAULT false,
+    "refreshToken" TEXT,
+    "refreshTokenExpires" TIMESTAMP(3),
+
+    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateTable
 CREATE TABLE "Job" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'queued',
@@ -9,48 +35,55 @@ CREATE TABLE "Job" (
     "payload" TEXT NOT NULL,
     "result" TEXT,
     "error" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Job_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ThemeSnapshot" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "themeId" TEXT NOT NULL,
     "themeName" TEXT NOT NULL,
     "reason" TEXT NOT NULL,
     "label" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ThemeSnapshot_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ThemeSnapshotFile" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "snapshotId" TEXT NOT NULL,
     "filename" TEXT NOT NULL,
     "checksum" TEXT,
     "size" INTEGER NOT NULL,
     "contentType" TEXT NOT NULL,
-    "updatedAt" DATETIME NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "encoding" TEXT NOT NULL,
     "body" TEXT,
-    CONSTRAINT "ThemeSnapshotFile_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "ThemeSnapshot" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "ThemeSnapshotFile_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ThemeLink" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "workingThemeId" TEXT NOT NULL,
     "sourceThemeId" TEXT NOT NULL,
     "baselineSnapshotId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ThemeLink_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ThemeMerge" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "kind" TEXT NOT NULL DEFAULT 'same-store',
     "liveShop" TEXT NOT NULL,
@@ -62,18 +95,20 @@ CREATE TABLE "ThemeMerge" (
     "targetThemeName" TEXT NOT NULL,
     "baselineSnapshotId" TEXT,
     "mode" TEXT NOT NULL,
-    "forkTime" DATETIME,
+    "forkTime" TIMESTAMP(3),
     "status" TEXT NOT NULL DEFAULT 'analyzing',
     "jobId" TEXT,
     "summary" TEXT,
-    "appliedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "appliedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ThemeMerge_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "ThemeMergeFile" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "mergeId" TEXT NOT NULL,
     "filename" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
@@ -89,42 +124,49 @@ CREATE TABLE "ThemeMergeFile" (
     "encoding" TEXT NOT NULL DEFAULT 'text',
     "mergeData" TEXT,
     "resultBody" TEXT,
-    CONSTRAINT "ThemeMergeFile_mergeId_fkey" FOREIGN KEY ("mergeId") REFERENCES "ThemeMerge" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "ThemeMergeFile_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "PairingCode" (
-    "code" TEXT NOT NULL PRIMARY KEY,
+    "code" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "role" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PairingCode_pkey" PRIMARY KEY ("code")
 );
 
 -- CreateTable
 CREATE TABLE "StorePair" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "stagingShop" TEXT NOT NULL,
     "liveShop" TEXT NOT NULL,
     "baselineSnapshotId" TEXT,
-    "clonedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "clonedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StorePair_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "StoreSnapshot" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "pairId" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
     "resourceTypes" TEXT NOT NULL,
     "themeSnapshotId" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StoreSnapshot_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "StoreSnapshotItem" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "snapshotId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -132,23 +174,26 @@ CREATE TABLE "StoreSnapshotItem" (
     "title" TEXT NOT NULL,
     "data" TEXT NOT NULL,
     "transfer" TEXT,
-    CONSTRAINT "StoreSnapshotItem_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "StoreSnapshot" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "StoreSnapshotItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "StoreCompare" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "pairId" TEXT NOT NULL,
     "jobId" TEXT,
     "baselineId" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'running',
     "summary" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StoreCompare_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "StoreCompareItem" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "compareId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -163,25 +208,28 @@ CREATE TABLE "StoreCompareItem" (
     "liveData" TEXT,
     "mergedData" TEXT,
     "transfer" TEXT,
-    CONSTRAINT "StoreCompareItem_compareId_fkey" FOREIGN KEY ("compareId") REFERENCES "StoreCompare" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+
+    CONSTRAINT "StoreCompareItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Promotion" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "pairId" TEXT NOT NULL,
     "compareId" TEXT NOT NULL,
     "jobId" TEXT,
     "status" TEXT NOT NULL DEFAULT 'queued',
     "prepushSnapshotId" TEXT,
     "summary" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "finishedAt" DATETIME
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finishedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Promotion_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "PromotionItem" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "promotionId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -191,8 +239,9 @@ CREATE TABLE "PromotionItem" (
     "error" TEXT,
     "liveGid" TEXT,
     "createdGid" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PromotionItem_promotionId_fkey" FOREIGN KEY ("promotionId") REFERENCES "Promotion" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PromotionItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -236,3 +285,19 @@ CREATE UNIQUE INDEX "StoreCompareItem_compareId_type_key_key" ON "StoreCompareIt
 
 -- CreateIndex
 CREATE INDEX "Promotion_pairId_createdAt_idx" ON "Promotion"("pairId", "createdAt");
+
+-- AddForeignKey
+ALTER TABLE "ThemeSnapshotFile" ADD CONSTRAINT "ThemeSnapshotFile_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "ThemeSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ThemeMergeFile" ADD CONSTRAINT "ThemeMergeFile_mergeId_fkey" FOREIGN KEY ("mergeId") REFERENCES "ThemeMerge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StoreSnapshotItem" ADD CONSTRAINT "StoreSnapshotItem_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "StoreSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StoreCompareItem" ADD CONSTRAINT "StoreCompareItem_compareId_fkey" FOREIGN KEY ("compareId") REFERENCES "StoreCompare"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PromotionItem" ADD CONSTRAINT "PromotionItem_promotionId_fkey" FOREIGN KEY ("promotionId") REFERENCES "Promotion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

@@ -17,8 +17,8 @@ Built on Shopify's official React Router app template, Admin GraphQL API **2026-
 
 ## Quick start
 
-Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/apps/tools/cli), a Partner account, and two development
-stores if you want to try Staging.
+Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/apps/tools/cli), a Postgres database, a Partner account,
+and two development stores if you want to try Staging. Set `DATABASE_URL` before running anything (see `.env`).
 
 ```bash
 npm install
@@ -121,7 +121,7 @@ app/
     shopify/               GraphQL documents (validated against the 2026-10 schema)
   services/                Server side: Shopify client wrapper, jobs, snapshots, theme merges, staging, pairing
   routes/                  Embedded admin UI (Polaris web components) and webhooks
-prisma/                    Schema + migrations (SQLite by default)
+prisma/                    Schema + migrations (Postgres)
 test/                      Fake Shopify Admin API + end-to-end workflow tests
 docs/                      Exemption request draft
 ```
@@ -140,8 +140,9 @@ npm run build
 ```
 
 The end-to-end suite (`test/integration`) pairs two simulated stores, clones, edits both sides, compares, resolves a
-conflict, promotes, checks the staleness guard, rolls back, and runs both theme flows — against a real SQLite database
-created from the committed migrations.
+conflict, promotes, checks the staleness guard, rolls back, and runs both theme flows — against a real Postgres database
+created from the committed migrations, run in-process with PGlite so no database server is needed. Set `DATABASE_URL_TEST`
+to run the suite against a real Postgres instead.
 
 ## Status and known limitations
 
@@ -164,4 +165,5 @@ Known limitations / next steps:
   reads to bulk operations.
 - Metaobject fields cleared on staging aren't cleared on live (values are upserted, not removed).
 - Rollback recreates deleted resources with new GIDs; references to them elsewhere aren't restored.
-- SQLite is fine for development. Use Postgres in production (theme snapshots store full text bodies).
+- Theme snapshots store full file bodies, so the database grows with every snapshot — prune old ones periodically.
+- The job worker runs in-process and requeues anything left `running` at boot, so run a single instance of the app.

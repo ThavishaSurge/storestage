@@ -42,8 +42,9 @@ export interface RawTheme {
 }
 
 export const THEMES = `#graphql
-  query StoreStageThemes {
-    themes(first: 50) {
+  query StoreStageThemes($first: Int!, $after: String) {
+    themes(first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
       nodes { id name role createdAt updatedAt processing }
     }
   }

@@ -1,13 +1,12 @@
 /**
- * Integration test harness: a real Prisma client on a throwaway SQLite file (schema created from
- * the committed migrations) and FakeStores standing in for Shopify.
+ * Integration test harness: a real Prisma client on a throwaway Postgres, with FakeStores
+ * standing in for Shopify.
  *
- * Runs with the standard Prisma engine. In sandboxes where Prisma's engine binaries can't be
- * downloaded, set PRISMA_TEST_ADAPTER=libsql (and install @prisma/adapter-libsql) to use a driver
- * adapter instead.
+ * Postgres runs in-process via PGlite, so the suite needs no database server and the committed
+ * migration SQL is applied exactly as it would be in production. Set DATABASE_URL_TEST to run
+ * against a real Postgres instead (its public schema is dropped and recreated).
  */
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import type { FakeStore } from "../fakes/fakeShopify";
@@ -20,33 +19,40 @@ declare global {
 }
 
 export async function createTestDb(): Promise<{ prisma: PrismaClient; cleanup: () => Promise<void> }> {
-  const file = path.join(os.tmpdir(), `storestage-test-${process.pid}-${Date.now()}.sqlite`);
-  let prisma: PrismaClient;
-  if (process.env.PRISMA_TEST_ADAPTER === "libsql") {
-    const mod = (await import(/* @vite-ignore */ "@prisma/adapter-libsql" as string)) as { PrismaLibSQL: new (cfg: { url: string }) => unknown };
-    prisma = new PrismaClient({ adapter: new mod.PrismaLibSQL({ url: `file:${file}` }) } as never);
-  } else {
-    prisma = new PrismaClient({ datasourceUrl: `file:${file}` });
+  const migrations = migrationSql();
+  if (process.env.DATABASE_URL_TEST) {
+    const prisma = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL_TEST });
+    await prisma.$executeRawUnsafe(`DROP SCHEMA IF EXISTS public CASCADE`);
+    for (const sql of migrations) await prisma.$executeRawUnsafe(sql);
+    globalThis.prismaGlobal = prisma;
+    return { prisma, cleanup: () => prisma.$disconnect() };
   }
 
-  const dir = path.resolve(__dirname, "../../prisma/migrations");
-  for (const migration of fs.readdirSync(dir).filter((d) => fs.statSync(path.join(dir, d)).isDirectory()).sort()) {
-    const sql = fs.readFileSync(path.join(dir, migration, "migration.sql"), "utf8");
-    const statements = sql
-      .split(/;\s*(?:\n|$)/)
-      .map((s) => s.replace(/^\s*--.*$/gm, "").trim())
-      .filter(Boolean);
-    for (const statement of statements) await prisma.$executeRawUnsafe(statement);
-  }
+  const { PGlite } = await import("@electric-sql/pglite");
+  const { PrismaPGlite } = await import("pglite-prisma-adapter");
+  const pglite = new PGlite(); // in-memory
+  // exec() takes whole migration files, so no statement splitting to get wrong.
+  for (const sql of migrations) await pglite.exec(sql);
+  const prisma = new PrismaClient({ adapter: new PrismaPGlite(pglite) } as never);
 
   globalThis.prismaGlobal = prisma;
   return {
     prisma,
     cleanup: async () => {
       await prisma.$disconnect();
-      fs.rmSync(file, { force: true });
+      await pglite.close();
     },
   };
+}
+
+/** The committed migrations, oldest first. */
+function migrationSql(): string[] {
+  const dir = path.resolve(__dirname, "../../prisma/migrations");
+  return fs
+    .readdirSync(dir)
+    .filter((d) => fs.statSync(path.join(dir, d)).isDirectory())
+    .sort()
+    .map((d) => fs.readFileSync(path.join(dir, d, "migration.sql"), "utf8"));
 }
 
 export function registerStores(...stores: FakeStore[]) {

@@ -219,7 +219,7 @@ export class FakeStore {
   }
 
   op_StoreStageThemes() {
-    return { themes: { nodes: this.themes } };
+    return { themes: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: this.themes } };
   }
   op_StoreStageTheme(v: Vars) {
     return { theme: this.themes.find((t) => t.id === v.id) ?? null };

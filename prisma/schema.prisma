@@ -1,14 +1,13 @@
 // StoreStage database schema.
-// SQLite for local development. For production switch the provider to postgresql
-// (theme snapshots store full file bodies, so plan for a few MB per snapshot).
+// Postgres. Theme snapshots store full file bodies, so plan for a few MB per snapshot.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {

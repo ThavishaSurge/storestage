@@ -20,10 +20,24 @@ import { themeWritesEnabled } from "./flags.server";
 
 export type { RawTheme };
 
+/**
+ * Every theme in the store, published first and then most recently updated first — the themes
+ * you are most likely to be comparing. Paginated: a store can hold more themes than one page,
+ * and a truncated list silently hides the theme you wanted.
+ */
 export async function listThemes(admin: AdminClient): Promise<RawTheme[]> {
-  const data = await gql<{ themes: { nodes: RawTheme[] } }>(admin, THEMES);
-  const order: Record<string, number> = { MAIN: 0, UNPUBLISHED: 1, DEVELOPMENT: 2 };
-  return data.themes.nodes.sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.name.localeCompare(b.name));
+  const nodes = await paginate<RawTheme, { themes: { pageInfo: PageInfo; nodes: RawTheme[] } | null }>(
+    admin,
+    THEMES,
+    { first: 250 },
+    (data) => data.themes,
+  );
+  return nodes.sort(
+    (a, b) =>
+      Number(b.role === "MAIN") - Number(a.role === "MAIN") ||
+      Date.parse(b.updatedAt) - Date.parse(a.updatedAt) ||
+      a.name.localeCompare(b.name),
+  );
 }
 
 export async function getTheme(admin: AdminClient, id: string): Promise<RawTheme | null> {

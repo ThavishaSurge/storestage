@@ -1,12 +1,13 @@
 # StoreStage — notes for coding agents
 
-Shopify embedded app (React Router 7 template, Polaris web components, Prisma/SQLite, Admin GraphQL 2026-10).
+Shopify embedded app (React Router 7 template, Polaris web components, Prisma/Postgres, Admin GraphQL 2026-10).
 Read README.md for the product; this file is the working map.
 
 ## Commands
 
 - `npm run check` — typecheck + GraphQL validation + all tests. Run before finishing any change.
-- `npm test` — vitest: unit tests in `app/**/*.test.ts`, end-to-end flows in `test/integration` (fake Shopify, real SQLite).
+- `npm test` — vitest: unit tests in `app/**/*.test.ts`, end-to-end flows in `test/integration` (fake Shopify, real Postgres
+  in-process via PGlite — no database server needed).
 - `npm run validate:graphql` — validates every `` `#graphql` `` template literal in `app/` against `.schema/admin-2026-10.json.gz`.
   Documents must not use `${}` interpolation (the validator skips them).
 - `npm run dev` — `shopify app dev`.

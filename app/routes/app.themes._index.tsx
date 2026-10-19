@@ -125,7 +125,7 @@ export default function ThemesIndex() {
               <select className="ss-select" name="liveThemeId" value={liveId} onChange={(e) => changeLive(e.target.value)}>
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} {t.role === "MAIN" ? "(published)" : ""}
+                    {themeOptionLabel(t)}
                   </option>
                 ))}
               </select>
@@ -135,7 +135,7 @@ export default function ThemesIndex() {
               <select className="ss-select" name="targetThemeId" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
                 {others.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} — created {formatDate(t.createdAt)}
+                    {themeOptionLabel(t)}
                   </option>
                 ))}
               </select>
@@ -329,3 +329,8 @@ export default function ThemesIndex() {
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);
+/** Published state and the edit date, so the newest themes are identifiable at a glance. */
+function themeOptionLabel(t: { name: string; role: string; createdAt: string; updatedAt: string }) {
+  const role = t.role === "MAIN" ? "published" : t.role.toLowerCase();
+  return `${t.name} — ${role}, edited ${formatDate(t.updatedAt)}`;
+}
