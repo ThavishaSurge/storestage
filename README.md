@@ -46,8 +46,11 @@ production apps each need their own request). Shopify says it responds within tw
 StoreStage fits two listed categories: *developer tooling and testing* and *backups* (it snapshots themes before every
 write and can restore). A draft of the request is in [`docs/theme-exemption-request.md`](docs/theme-exemption-request.md).
 
-Until it's granted, everything still works except the "Apply" buttons: compare, decide, then **Download merged files** —
-the zip contains the files in theme layout plus `MERGE-REPORT.md` with the exact `shopify theme push --only …` command.
+Until it's granted, everything still works except the "Apply" buttons: compare, decide, then export.
+**Download full theme** gives every file of the merged theme at the root of the zip — upload it under Online Store → Themes →
+Add theme → Upload zip file and Shopify creates a new unpublished theme to preview and publish, no CLI needed. It reads the
+whole theme (binary assets included), so it takes a while and needs every file decided first. **Download changed files** gives
+only the diff, in theme layout, plus `MERGE-REPORT.md` with the exact `shopify theme push --only …` command.
 Without the exemption, also duplicate themes in the Shopify admin and click **Record baseline** right after, so later
 merges are three-way.
 
@@ -63,7 +66,10 @@ merges are three-way.
    (JSON structurally, text with diff3). Ordered arrays like a template's `order` or a section's `block_order` merge as
    ordered sets, so a section the client added and a section you added both survive.
 4. You resolve what's left per conflict (live / copy / both), per file, or by editing the result by hand.
-5. **Apply** snapshots the working copy (for rollback) and writes the merged files. The live theme is never written.
+5. Finish either way: **Apply to working copy** snapshots it first (for rollback) and writes the merged files into it, or
+   **Create merged theme** duplicates the working copy and writes the merged result into the duplicate, leaving the working
+   copy untouched — preview it, then publish. The live theme is never written. If the store's 20-theme library is full,
+   the duplicate fails before anything is written: delete an old theme and apply again.
 
 ### Staging
 

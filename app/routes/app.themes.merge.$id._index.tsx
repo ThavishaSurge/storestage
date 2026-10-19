@@ -6,7 +6,7 @@ import db from "../db.server";
 import { authenticate } from "../shopify.server";
 import { describeError } from "../services/admin.server";
 import { themeWritesEnabled } from "../services/flags.server";
-import { setFileResolution, startApply } from "../services/themeMerge.server";
+import { setFileResolution, startApply, type ApplyMode } from "../services/themeMerge.server";
 import type { Resolution } from "../lib/theme/compare";
 import { downloadFile, formatDate, JobProgress, Stat, StatusBadge } from "../components/ui";
 
@@ -56,7 +56,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       return { ok: true };
     }
     if (intent === "apply") {
-      const jobId = await startApply(session.shop, String(params.id));
+      const mode: ApplyMode = form.get("applyMode") === "new-copy" ? "new-copy" : "in-place";
+      const jobId = await startApply(session.shop, String(params.id), mode);
       return { jobId };
     }
     throw new Error(`Unknown action ${intent}`);
@@ -95,6 +96,8 @@ export default function MergePage() {
   const visible = files.filter(filter.match);
   const sideLabel = crossStore ? "staging" : "working copy";
   const jobId = action.data?.jobId ?? (applyJob && ["queued", "running"].includes(applyJob.status) ? applyJob.id : null);
+  const applyDisabled = !writesEnabled || unresolved > 0 || merge.status !== "ready" || Boolean(jobId);
+  const applyBlockedReason = !writesEnabled ? "Theme writes are disabled" : unresolved ? "Resolve every file first" : "";
 
   if (merge.status === "analyzing" && merge.jobId) {
     return (
@@ -106,11 +109,14 @@ export default function MergePage() {
     );
   }
 
-  const download = async () => {
+  const download = async (full = false) => {
     setDownloading(true);
     setDownloadError(null);
     try {
-      await downloadFile(`/app/themes/merge/${merge.id}/export`, "theme-merge.zip");
+      await downloadFile(
+        `/app/themes/merge/${merge.id}/export${full ? "?full=1" : ""}`,
+        full ? "theme-merged.zip" : "theme-merge.zip",
+      );
     } catch (error) {
       setDownloadError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -137,16 +143,39 @@ export default function MergePage() {
             </span>
           </div>
           <div className="ss-row">
-            <button className="ss-btn" type="button" onClick={download} disabled={downloading || merge.status === "failed"}>
-              {downloading ? "Preparing…" : "Download merged files"}
+            <button className="ss-btn" type="button" onClick={() => download(false)} disabled={downloading || merge.status === "failed"}>
+              {downloading ? "Preparing…" : "Download changed files"}
             </button>
-            <action.Form method="post">
+            <button
+              className="ss-btn"
+              type="button"
+              onClick={() => download(true)}
+              disabled={downloading || unresolved > 0 || merge.status !== "ready"}
+              title={unresolved ? "Resolve every file first" : "Every file of the merged theme, ready to upload as a new theme"}
+            >
+              {downloading ? "Preparing…" : "Download full theme"}
+            </button>
+            <action.Form method="post" className="ss-row">
               <input type="hidden" name="intent" value="apply" />
+              {!crossStore && (
+                <button
+                  className="ss-btn"
+                  type="submit"
+                  name="applyMode"
+                  value="new-copy"
+                  disabled={applyDisabled}
+                  title={applyBlockedReason || "Duplicates the working copy and writes the merged result into the duplicate"}
+                >
+                  Create merged theme
+                </button>
+              )}
               <button
                 className="ss-btn ss-btn--primary"
                 type="submit"
-                disabled={!writesEnabled || unresolved > 0 || merge.status !== "ready" || Boolean(jobId)}
-                title={!writesEnabled ? "Theme writes are disabled" : unresolved ? "Resolve every file first" : ""}
+                name="applyMode"
+                value="in-place"
+                disabled={applyDisabled}
+                title={applyBlockedReason}
               >
                 {crossStore ? "Create merged copy on live" : "Apply to working copy"}
               </button>
@@ -169,12 +198,20 @@ export default function MergePage() {
             <JobProgress jobId={jobId} label="Writing theme files" />
           </div>
         )}
+        {!jobId && applyJob?.status === "failed" && merge.status === "ready" && (
+          <s-banner tone="critical" heading="Apply failed">
+            <s-paragraph>{applyJob.error}</s-paragraph>
+            <s-paragraph>Your decisions are saved — fix the problem and apply again.</s-paragraph>
+          </s-banner>
+        )}
         {merge.status === "applied" && (
           <s-banner tone="success" heading="Applied">
             <s-paragraph>
               {crossStore
                 ? `Merged copy created on the live store${applyJob?.result?.themeName ? ` as "${String(applyJob.result.themeName)}"` : ""}. Preview it in Online Store → Themes, then publish.`
-                : `The working copy now contains the client's live changes. Preview it, then publish it from Online Store → Themes.`}{" "}
+                : applyJob?.result?.themeName
+                  ? `Merged theme created as "${String(applyJob.result.themeName)}", with the working copy left untouched. Preview it in Online Store → Themes, then publish.`
+                  : `The working copy now contains the client's live changes. Preview it, then publish it from Online Store → Themes.`}{" "}
               Applied {formatDate(merge.appliedAt)}.
             </s-paragraph>
           </s-banner>
@@ -182,8 +219,10 @@ export default function MergePage() {
         {!writesEnabled && merge.status === "ready" && (
           <s-banner tone="info">
             <s-paragraph>
-              Theme writes are disabled until Shopify grants the theme-write exemption. Download the merged files and push them with
-              Shopify CLI (instructions are in the zip&apos;s MERGE-REPORT.md).
+              Theme writes are disabled until Shopify grants the theme-write exemption. Use <strong>Download full theme</strong> and
+              upload the zip under Online Store → Themes → Add theme → Upload zip file; Shopify creates a new unpublished theme you
+              can preview and publish. <strong>Download changed files</strong> gives just the diff plus the matching{" "}
+              <code>shopify theme push</code> command in MERGE-REPORT.md.
             </s-paragraph>
           </s-banner>
         )}

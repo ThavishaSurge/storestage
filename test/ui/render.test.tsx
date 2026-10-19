@@ -97,7 +97,10 @@ describe("admin pages render", () => {
     ];
     const ready = render(<Page />, { merge, files, applyJob: null, writesEnabled: false });
     expect(ready).toContain("config/settings_data.json");
-    expect(ready).toContain("Download merged files");
+    expect(ready).toContain("Download changed files");
+    expect(ready).toContain("Download full theme");
+    // Undecided files: the full-theme zip would contain conflict markers, so it is blocked.
+    expect(ready).toContain('title="Resolve every file first"');
     expect(render(<Page />, { merge: { ...merge, status: "analyzing" }, files: [], applyJob: null, writesEnabled: true })).toContain("Analyzing");
     expect(render(<Page />, { merge: { ...merge, status: "applied", appliedAt: now, kind: "cross-store" }, files, applyJob: { id: "j2", status: "done", result: { themeName: "Dawn + staging" }, error: null }, writesEnabled: true })).toContain("Dawn + staging");
     expect(render(<Page />, { merge, files, applyJob: null, writesEnabled: true }, undefined, "filter=conflict")).toContain("assets/logo.png");

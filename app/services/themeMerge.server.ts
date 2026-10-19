@@ -401,12 +401,70 @@ export async function buildExportZip(shop: string, mergeId: string): Promise<{ f
   };
 }
 
-export async function startApply(shop: string, mergeId: string) {
+/**
+ * Where a same-store merge is written:
+ *   "in-place"  overwrite the working copy (snapshotted first, so it can be rolled back)
+ *   "new-copy"  duplicate the working copy and write the merged result into the duplicate,
+ *               leaving the working copy untouched. Cross-store merges always make a new copy.
+ */
+export type ApplyMode = "in-place" | "new-copy";
+
+/**
+ * Every file of the merged theme, in Shopify's zip layout: the base theme's files with merged
+ * bodies substituted and planned deletions dropped. Upload it under Online Store -> Themes ->
+ * Add theme -> Upload zip file and Shopify creates a new unpublished theme from it.
+ *
+ * Needs read_themes only, so this works before the theme-write exemption is granted. Unlike the
+ * delta zip it reads every file of the theme (including binary assets, which are downloaded one
+ * by one), so it is slow on a large theme and refuses to run while any file is undecided --
+ * a theme containing conflict markers would not be importable.
+ */
+export async function buildFullThemeZip(shop: string, mergeId: string): Promise<{ filename: string; bytes: Uint8Array }> {
+  const merge = await db.themeMerge.findFirstOrThrow({ where: { id: mergeId, shop } });
+  const undecided = await db.themeMergeFile.count({ where: { mergeId, resolved: false } });
+  if (undecided) throw new Error(`${undecided} file(s) still need a decision before a full theme can be built`);
+
+  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
+  // The plan is expressed against the theme it would have been written to.
+  const baseShop = merge.kind === "cross-store" ? merge.liveShop : merge.targetShop;
+  const baseThemeId = merge.kind === "cross-store" ? merge.liveThemeId : merge.targetThemeId;
+  const admin = await adminForShop(baseShop);
+
+  const upserts = new Map(plan.upserts.map((u) => [u.filename, u]));
+  const deletes = new Set(plan.deletes);
+  const meta = await fetchThemeFileMeta(admin, baseThemeId);
+  const carried = [...meta.keys()].filter((f) => !upserts.has(f) && !deletes.has(f));
+  const bodies = await fetchThemeFileBodies(admin, baseThemeId, carried);
+
+  // Theme files sit at the root of the zip; Shopify rejects anything it doesn't recognise, so
+  // no MERGE-REPORT.md here -- the delta zip carries that.
+  const entries: Record<string, Uint8Array> = {};
+  for (const [filename, u] of upserts) {
+    entries[filename] = u.encoding === "base64" ? Uint8Array.from(Buffer.from(u.body, "base64")) : strToU8(u.body);
+  }
+  const missing: string[] = [];
+  for (const filename of carried) {
+    const body = bodies.get(filename);
+    if (!body) {
+      missing.push(filename); // deleted between the metadata read and the body read
+      continue;
+    }
+    entries[filename] = body.encoding === "base64" ? Uint8Array.from(Buffer.from(body.body, "base64")) : strToU8(body.body);
+  }
+  if (missing.length) throw new Error(`Couldn't read ${missing.length} file(s) from the theme (${missing.slice(0, 3).join(", ")}). Try again.`);
+
+  return {
+    filename: `theme-merged-${merge.targetThemeName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.zip`,
+    bytes: zipSync(entries, { level: 6 }),
+  };
+}
+
+export async function startApply(shop: string, mergeId: string, mode: ApplyMode = "in-place") {
   const merge = await db.themeMerge.findFirstOrThrow({ where: { id: mergeId, shop } });
   if (merge.status !== "ready") throw new Error("This merge isn't ready to apply");
   const unresolved = await db.themeMergeFile.count({ where: { mergeId, resolved: false } });
   if (unresolved) throw new Error(`${unresolved} file(s) still need a decision`);
-  return enqueueJob(shop, "theme.apply", { mergeId });
+  return enqueueJob(shop, "theme.apply", { mergeId, mode });
 }
 
 async function apply(payload: Record<string, unknown>, ctx: JobContext) {
@@ -417,15 +475,34 @@ async function apply(payload: Record<string, unknown>, ctx: JobContext) {
   if (!target) throw new Error("Working copy no longer exists");
   if (target.role === "MAIN") throw new Error("The working copy has been published; merges are only applied to unpublished themes");
 
+  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
+  if (payload.mode === "new-copy") {
+    // The write plan is expressed relative to the working copy, and a duplicate starts out
+    // identical to it, so the same upserts/deletes yield the merged theme.
+    await ctx.progress(0.05, "Duplicating the working copy");
+    const copy = await duplicateTheme(admin, target.id, stampedThemeName(target.name, "merged"));
+    await waitForTheme(admin, copy.id);
+    await ctx.progress(0.3, `Writing ${plan.upserts.length} files`);
+    await upsertThemeFiles(admin, copy.id, plan.upserts, (n) => ctx.progress(0.3 + (n / Math.max(plan.upserts.length, 1)) * 0.6));
+    if (plan.deletes.length) await deleteThemeFiles(admin, copy.id, plan.deletes);
+    await db.themeMerge.update({ where: { id: merge.id }, data: { status: "applied", appliedAt: new Date() } });
+    return { themeId: copy.id, themeName: copy.name, written: plan.upserts.length, deleted: plan.deletes.length };
+  }
+
   await ctx.progress(0.05, "Snapshotting the working copy (for rollback)");
   const snapshotId = await snapshotTheme({ admin, shop: ctx.shop, theme: target, reason: "pre-apply", label: `Before merge ${merge.id}` });
 
-  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
   await ctx.progress(0.4, `Writing ${plan.upserts.length} files`);
   await upsertThemeFiles(admin, target.id, plan.upserts, (n) => ctx.progress(0.4 + (n / Math.max(plan.upserts.length, 1)) * 0.5));
   if (plan.deletes.length) await deleteThemeFiles(admin, target.id, plan.deletes);
   await db.themeMerge.update({ where: { id: merge.id }, data: { status: "applied", appliedAt: new Date() } });
   return { written: plan.upserts.length, deleted: plan.deletes.length, preApplySnapshotId: snapshotId };
+}
+
+/** Shopify caps theme names at 50 characters. */
+function stampedThemeName(base: string, label: string) {
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  return `${base} ${label} ${stamp}`.slice(0, 50);
 }
 
 /**
@@ -438,8 +515,7 @@ async function applyCrossStore(merge: { id: string; liveShop: string; liveThemeI
   if (!live) throw new Error("Live theme no longer exists");
   const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
   await ctx.progress(0.05, "Duplicating the live theme");
-  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const copy = await duplicateTheme(admin, live.id, `${live.name} + staging ${stamp}`.slice(0, 50));
+  const copy = await duplicateTheme(admin, live.id, stampedThemeName(live.name, "+ staging"));
   await waitForTheme(admin, copy.id);
   await ctx.progress(0.3, `Writing ${plan.upserts.length} files`);
   await upsertThemeFiles(admin, copy.id, plan.upserts, (n) => ctx.progress(0.3 + (n / Math.max(plan.upserts.length, 1)) * 0.6));

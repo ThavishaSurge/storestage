@@ -15,7 +15,7 @@ import {
   type RawThemeFileMeta,
 } from "../lib/shopify/queries";
 import { THEME_DUPLICATE, THEME_FILES_DELETE, THEME_FILES_UPSERT } from "../lib/shopify/mutations";
-import { assertNoUserErrors, gql, paginate, type AdminClient } from "./admin.server";
+import { assertNoUserErrors, gql, paginate, ShopifyUserError, type AdminClient } from "./admin.server";
 import { themeWritesEnabled } from "./flags.server";
 
 export type { RawTheme };
@@ -180,14 +180,37 @@ function requireWrites() {
   if (!themeWritesEnabled()) throw new ThemeWritesDisabledError();
 }
 
+/** A Shopify theme library holds 20 themes; development themes don't count towards it. */
+export const THEME_LIBRARY_LIMIT = 20;
+
+export class ThemeLimitError extends Error {
+  constructor(count: number) {
+    super(
+      `This store's theme library is full (${count} of ${THEME_LIBRARY_LIMIT} themes). Delete an old theme in Online Store \u2192 Themes, then run this again \u2014 nothing has been written yet.`,
+    );
+    this.name = "ThemeLimitError";
+  }
+}
+
 export async function duplicateTheme(admin: AdminClient, themeId: string, name: string): Promise<RawTheme> {
   requireWrites();
+  // Checked up front so a full library fails before anything is written, and the merge can simply
+  // be re-run once a theme is deleted.
+  const inLibrary = (await listThemes(admin)).filter((t) => t.role !== "DEVELOPMENT").length;
+  if (inLibrary >= THEME_LIBRARY_LIMIT) throw new ThemeLimitError(inLibrary);
+
   const data = await gql<{ themeDuplicate: { newTheme: RawTheme | null; userErrors: { field: string[] | null; message: string }[] } }>(
     admin,
     THEME_DUPLICATE,
     { id: themeId, name },
   );
-  assertNoUserErrors(data.themeDuplicate, "Duplicating theme");
+  try {
+    assertNoUserErrors(data.themeDuplicate, "Duplicating theme");
+  } catch (error) {
+    // Backstop: the limit isn't a typed error code, and it differs on some plans.
+    if (error instanceof ShopifyUserError && /\b(limit|maximum|too many)\b/i.test(error.message)) throw new ThemeLimitError(inLibrary);
+    throw error;
+  }
   if (!data.themeDuplicate.newTheme) throw new Error("Shopify didn't return the duplicated theme");
   return data.themeDuplicate.newTheme;
 }

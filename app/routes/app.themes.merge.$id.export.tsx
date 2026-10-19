@@ -1,11 +1,17 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { buildExportZip } from "../services/themeMerge.server";
+import { buildExportZip, buildFullThemeZip } from "../services/themeMerge.server";
 
-/** Zip of merged theme files + MERGE-REPORT.md. */
+/**
+ * `?full=1` → every file of the merged theme, ready to upload as a new theme.
+ * Otherwise  → only the files that changed, plus MERGE-REPORT.md, for `shopify theme push`.
+ */
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const { filename, bytes } = await buildExportZip(session.shop, String(params.id));
+  const full = new URL(request.url).searchParams.get("full") === "1";
+  const { filename, bytes } = full
+    ? await buildFullThemeZip(session.shop, String(params.id))
+    : await buildExportZip(session.shop, String(params.id));
   return new Response(bytes as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/zip",
