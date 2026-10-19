@@ -1,0 +1,95 @@
+/* StoreStage UI helpers. Layout and typography come from Polaris web components;
+   these cover what Polaris doesn't ship: native form controls, diffs and dense tables. */
+
+:root {
+  --ss-border: #e3e3e3;
+  --ss-subdued: #616161;
+  --ss-bg-subdued: #f7f7f7;
+  --ss-add-bg: #e6f4ea;
+  --ss-add-fg: #0b6b2b;
+  --ss-del-bg: #fdecea;
+  --ss-del-fg: #8e1f0b;
+  --ss-accent: #303030;
+  --ss-radius: 8px;
+  --ss-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ss-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ss-col { display: flex; flex-direction: column; gap: 8px; }
+.ss-grow { flex: 1 1 auto; min-width: 0; }
+.ss-muted { color: var(--ss-subdued); font-size: 12px; }
+.ss-mono { font-family: var(--ss-mono); font-size: 12px; }
+.ss-nowrap { white-space: nowrap; }
+.ss-break { word-break: break-all; }
+
+.ss-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ss-field > span { font-weight: 550; }
+.ss-input, .ss-select, .ss-textarea {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid #8a8a8a;
+  border-radius: var(--ss-radius);
+  background: #fff;
+  min-height: 32px;
+}
+.ss-textarea { font-family: var(--ss-mono); font-size: 12px; min-height: 280px; width: 100%; box-sizing: border-box; }
+.ss-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+
+.ss-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  padding: 6px 12px;
+  border-radius: var(--ss-radius);
+  border: 1px solid #c9c9c9;
+  background: #fff;
+  color: #303030;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
+}
+.ss-btn:hover { background: #f6f6f6; }
+.ss-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ss-btn--primary { background: var(--ss-accent); border-color: var(--ss-accent); color: #fff; }
+.ss-btn--primary:hover { background: #1a1a1a; }
+.ss-btn--critical { background: #c70a24; border-color: #c70a24; color: #fff; }
+.ss-btn--small { padding: 2px 8px; font-size: 12px; }
+.ss-btn--active { background: #303030; color: #fff; border-color: #303030; }
+
+.ss-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ss-table th { text-align: left; font-weight: 550; color: var(--ss-subdued); padding: 6px 8px; border-bottom: 1px solid var(--ss-border); }
+.ss-table td { padding: 6px 8px; border-bottom: 1px solid var(--ss-border); vertical-align: top; }
+.ss-table tr:hover td { background: #fafafa; }
+
+.ss-diff { font-family: var(--ss-mono); font-size: 12px; border: 1px solid var(--ss-border); border-radius: var(--ss-radius); overflow: auto; max-height: 560px; background: #fff; }
+.ss-diff table { border-collapse: collapse; width: 100%; }
+.ss-diff td { padding: 0 8px; white-space: pre; line-height: 18px; }
+.ss-diff .ln { color: #999; text-align: right; user-select: none; width: 1%; border-right: 1px solid var(--ss-border); }
+.ss-diff .add td { background: var(--ss-add-bg); color: var(--ss-add-fg); }
+.ss-diff .del td { background: var(--ss-del-bg); color: var(--ss-del-fg); }
+.ss-diff .skip td { background: var(--ss-bg-subdued); color: #888; text-align: center; font-style: italic; }
+
+.ss-code { font-family: var(--ss-mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; background: var(--ss-bg-subdued); border: 1px solid var(--ss-border); border-radius: var(--ss-radius); padding: 8px; margin: 0; max-height: 360px; overflow: auto; }
+
+.ss-hunk { border: 1px solid var(--ss-border); border-radius: var(--ss-radius); overflow: hidden; margin: 8px 0; }
+.ss-hunk__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; background: var(--ss-bg-subdued); border-bottom: 1px solid var(--ss-border); flex-wrap: wrap; }
+.ss-hunk__sides { display: grid; grid-template-columns: 1fr 1fr; }
+.ss-hunk__side { min-width: 0; }
+.ss-hunk__side + .ss-hunk__side { border-left: 1px solid var(--ss-border); }
+.ss-hunk__label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; color: var(--ss-subdued); }
+.ss-hunk pre { margin: 0; padding: 6px 8px; font-family: var(--ss-mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow: auto; }
+.ss-hunk--decided { border-color: #9ed3ad; }
+.ss-context { color: #888; background: #fcfcfc; }
+
+.ss-progress { height: 6px; border-radius: 3px; background: #ececec; overflow: hidden; }
+.ss-progress > div { height: 100%; background: var(--ss-accent); transition: width 0.4s ease; }
+
+.ss-stat { display: flex; flex-direction: column; padding: 8px 12px; border: 1px solid var(--ss-border); border-radius: var(--ss-radius); min-width: 110px; }
+.ss-stat strong { font-size: 20px; }
+.ss-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .ss-hunk__sides { grid-template-columns: 1fr; }
+  .ss-hunk__side + .ss-hunk__side { border-left: 0; border-top: 1px solid var(--ss-border); }
+}

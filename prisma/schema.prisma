@@ -1,0 +1,263 @@
+// StoreStage database schema.
+// SQLite for local development. For production switch the provider to postgresql
+// (theme snapshots store full file bodies, so plan for a few MB per snapshot).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Background jobs (in-process worker; swap for a real queue when scaling out)
+// ---------------------------------------------------------------------------
+
+model Job {
+  id        String   @id @default(cuid())
+  shop      String
+  type      String
+  status    String   @default("queued") // queued | running | done | failed
+  progress  Int      @default(0) // 0-100
+  message   String?
+  payload   String // JSON
+  result    String? // JSON
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([shop, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Theme snapshots & theme merges (single-store Theme Compare)
+// ---------------------------------------------------------------------------
+
+model ThemeSnapshot {
+  id        String              @id @default(cuid())
+  shop      String
+  themeId   String
+  themeName String
+  reason    String // manual | working-copy | pre-apply | store-baseline
+  label     String?
+  createdAt DateTime            @default(now())
+  files     ThemeSnapshotFile[]
+
+  @@index([shop, themeId, createdAt])
+}
+
+model ThemeSnapshotFile {
+  id          String        @id @default(cuid())
+  snapshotId  String
+  snapshot    ThemeSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  filename    String
+  checksum    String?
+  size        Int
+  contentType String
+  updatedAt   DateTime
+  encoding    String // text | base64 | url | none
+  body        String?
+
+  @@unique([snapshotId, filename])
+}
+
+// A working copy created by the app: `workingThemeId` was duplicated from `sourceThemeId`
+// and `baselineSnapshotId` captured the source at that moment -> true three-way merges later.
+model ThemeLink {
+  id                 String   @id @default(cuid())
+  shop               String
+  workingThemeId     String
+  sourceThemeId      String
+  baselineSnapshotId String
+  createdAt          DateTime @default(now())
+
+  @@unique([shop, workingThemeId])
+}
+
+model ThemeMerge {
+  id                 String           @id @default(cuid())
+  // Shop whose admin owns this merge (where the UI runs).
+  shop               String
+  // same-store: working copy -> publish on the same shop.
+  // cross-store: staging theme changes -> a new copy of the live shop's published theme.
+  kind               String           @default("same-store")
+  liveShop           String
+  targetShop         String
+  pairId             String?
+  liveThemeId        String
+  liveThemeName      String
+  targetThemeId      String
+  targetThemeName    String
+  baselineSnapshotId String?
+  mode               String // three-way | heuristic
+  forkTime           DateTime?
+  status             String           @default("analyzing") // analyzing | ready | applied | failed
+  jobId              String?
+  summary            String? // JSON counts
+  appliedAt          DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  files              ThemeMergeFile[]
+
+  @@index([shop, createdAt])
+}
+
+model ThemeMergeFile {
+  id            String     @id @default(cuid())
+  mergeId       String
+  merge         ThemeMerge @relation(fields: [mergeId], references: [id], onDelete: Cascade)
+  filename      String
+  kind          String // json | text | binary
+  status        String // unchanged | live-changed | target-changed | both-same | auto-merged | conflict
+  reason        String
+  presence      String // JSON {base, live, target}
+  // What the target theme should end up with: keep | live | merged | delete
+  resolution    String
+  resolved      Boolean    @default(true)
+  conflictCount Int        @default(0)
+  baseBody      String?
+  liveBody      String?
+  targetBody    String?
+  encoding      String     @default("text")
+  mergeData     String? // JSON: hunks / json conflicts + per-conflict decisions
+  resultBody    String? // final content for resolution=merged
+
+  @@unique([mergeId, filename])
+}
+
+// ---------------------------------------------------------------------------
+// Two-store staging: pairing, snapshots, compares, promotions
+// ---------------------------------------------------------------------------
+
+model PairingCode {
+  code      String   @id
+  shop      String
+  role      String // role of the issuing shop: staging | live
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model StorePair {
+  id                 String   @id @default(cuid())
+  stagingShop        String   @unique
+  liveShop           String
+  baselineSnapshotId String?
+  clonedAt           DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([liveShop])
+}
+
+model StoreSnapshot {
+  id              String              @id @default(cuid())
+  pairId          String
+  kind            String // baseline | prepush
+  shop            String
+  resourceTypes   String // JSON array
+  themeSnapshotId String?
+  createdAt       DateTime            @default(now())
+  items           StoreSnapshotItem[]
+
+  @@index([pairId, kind, createdAt])
+}
+
+model StoreSnapshotItem {
+  id         String        @id @default(cuid())
+  snapshotId String
+  snapshot   StoreSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  type       String
+  key        String
+  gid        String?
+  title      String
+  data       String // normalized JSON with @ref(...) placeholders
+  transfer   String? // JSON, not compared (CDN urls etc.)
+
+  @@unique([snapshotId, type, key])
+}
+
+model StoreCompare {
+  id         String             @id @default(cuid())
+  pairId     String
+  jobId      String?
+  baselineId String
+  status     String             @default("running") // running | ready | failed
+  summary    String?
+  createdAt  DateTime           @default(now())
+  items      StoreCompareItem[]
+
+  @@index([pairId, createdAt])
+}
+
+model StoreCompareItem {
+  id          String       @id @default(cuid())
+  compareId   String
+  compare     StoreCompare @relation(fields: [compareId], references: [id], onDelete: Cascade)
+  type        String
+  key         String
+  title       String
+  status      String // staging-changed | live-changed | both-same | auto-merged | conflict
+  action      String // create | update | delete | none
+  selected    Boolean      @default(false)
+  conflicts   String? // JSON array of {path, base, staging, live}
+  decisions   String? // JSON map path -> staging|live
+  baseData    String?
+  stagingData String?
+  liveData    String?
+  mergedData  String?
+  transfer    String?
+
+  @@unique([compareId, type, key])
+}
+
+model Promotion {
+  id                String          @id @default(cuid())
+  pairId            String
+  compareId         String
+  jobId             String?
+  status            String          @default("queued") // queued | running | done | partial | failed | rolled-back
+  prepushSnapshotId String?
+  summary           String?
+  createdAt         DateTime        @default(now())
+  finishedAt        DateTime?
+  items             PromotionItem[]
+
+  @@index([pairId, createdAt])
+}
+
+model PromotionItem {
+  id          String    @id @default(cuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  type        String
+  key         String
+  title       String
+  action      String
+  status      String    @default("pending") // pending | done | failed | skipped | rolled-back | rollback-failed
+  error       String?
+  liveGid     String?
+  createdGid  String?
+  createdAt   DateTime  @default(now())
+}
