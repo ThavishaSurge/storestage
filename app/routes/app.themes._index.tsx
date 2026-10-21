@@ -111,7 +111,7 @@ export default function ThemesIndex() {
   const busy = compare.state !== "idle";
 
   return (
-    <s-page heading="Theme Compare">
+    <s-page heading="Compare themes">
       <s-section heading="Compare two themes">
         <s-paragraph>
           Pick the live theme (it has the client&apos;s edits) and the working copy you want to publish. ThemeMerge finds every

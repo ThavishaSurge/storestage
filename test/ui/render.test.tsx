@@ -68,7 +68,7 @@ describe("admin pages render", () => {
     };
     expect(render(<Page />, data)).toContain("No baseline for this pair");
     expect(render(<Page />, { ...data, links: [{ workingThemeId: themes[1].id, sourceThemeId: themes[0].id, baselineSnapshotId: "s1" }] })).toContain("Three-way compare");
-    expect(render(<Page />, { ...data, themes: [themes[0]] })).toContain("Theme Compare"); // single theme: nothing to compare against
+    expect(render(<Page />, { ...data, themes: [themes[0]] })).toContain("Compare themes"); // single theme: nothing to compare against
     expect(render(<Page />, data, { jobId: "j1", label: "Taking snapshot" })).toContain("Starting");
   });
 

@@ -1,5 +1,5 @@
 /**
- * Theme Compare planner.
+ * Theme merge planner.
  *
  * Inputs: file metadata for the LIVE theme (has client edits we must not lose), the TARGET theme
  * (the working copy we want to publish) and, when available, a BASE snapshot (the live theme at
