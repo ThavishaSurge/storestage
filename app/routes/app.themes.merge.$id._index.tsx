@@ -6,7 +6,7 @@ import db from "../db.server";
 import { authenticate } from "../shopify.server";
 import { describeError, type AdminClient } from "../services/admin.server";
 import { themeWritesEnabled } from "../services/flags.server";
-import { planState, UpgradeRequiredError } from "../services/billing.server";
+import { assertCanApply, planState, UpgradeRequiredError } from "../services/billing.server";
 import { setFileResolution, startApply, type ApplyMode } from "../services/themeMerge.server";
 import type { Resolution } from "../lib/theme/compare";
 import { downloadFile, formatDate, JobProgress, Stat, StatusBadge } from "../components/ui";
@@ -46,7 +46,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
   const intent = String(form.get("intent"));
   try {
@@ -55,6 +55,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       return { ok: true };
     }
     if (intent === "apply") {
+      // The UI hides these buttons off-plan; the action is still reachable, so check here too.
+      await assertCanApply(admin as unknown as AdminClient, session.shop);
       const mode: ApplyMode = form.get("applyMode") === "new-copy" ? "new-copy" : "in-place";
       const jobId = await startApply(session.shop, String(params.id), mode);
       return { jobId };
@@ -94,8 +96,15 @@ export default function MergePage() {
   const visible = files.filter(filter.match);
   const sideLabel = "working copy";
   const jobId = action.data?.jobId ?? (applyJob && ["queued", "running"].includes(applyJob.status) ? applyJob.id : null);
-  const applyDisabled = !writesEnabled || unresolved > 0 || merge.status !== "ready" || Boolean(jobId);
-  const applyBlockedReason = !writesEnabled ? "Theme writes are disabled" : unresolved ? "Resolve every file first" : "";
+  const canApply = plan.limits.apply;
+  const applyDisabled = !canApply || !writesEnabled || unresolved > 0 || merge.status !== "ready" || Boolean(jobId);
+  const applyBlockedReason = !canApply
+    ? "Creating the merged theme in your store is included in Pro"
+    : !writesEnabled
+      ? "Theme writes are disabled until Shopify grants the theme-write exemption"
+      : unresolved
+        ? "Resolve every file first"
+        : "";
 
   if (merge.status === "analyzing" && merge.jobId) {
     return (
@@ -138,26 +147,29 @@ export default function MergePage() {
             </span>
           </div>
           <div className="tm-row">
-            {plan.limits.export ? (
-              <>
-                <button className="tm-btn" type="button" onClick={() => download(false)} disabled={downloading || merge.status === "failed"}>
-                  {downloading ? "Preparing…" : "Download changed files"}
-                </button>
-                <button
-                  className="tm-btn"
-                  type="button"
-                  onClick={() => download(true)}
-                  disabled={downloading || unresolved > 0 || merge.status !== "ready"}
-                  title={unresolved ? "Resolve every file first" : "Every file of the merged theme, ready to upload as a new theme"}
-                >
-                  {downloading ? "Preparing…" : "Download full theme"}
-                </button>
-              </>
+            <button className="tm-btn" type="button" onClick={() => download(false)} disabled={downloading || merge.status === "failed"}>
+              {downloading ? "Preparing…" : "Download merged files"}
+            </button>
+            {plan.limits.exportFullTheme ? (
+              <button
+                className="tm-btn"
+                type="button"
+                onClick={() => download(true)}
+                disabled={downloading || unresolved > 0 || merge.status !== "ready"}
+                title={unresolved ? "Resolve every file first" : "Every file of the merged theme, ready to upload as a new theme"}
+              >
+                {downloading ? "Preparing…" : "Download full theme"}
+              </button>
             ) : (
-              <a className="tm-btn" href={plan.pricingUrl} target="_top" title="Downloading the merged theme is included in Pro">
-                Download merged theme <s-badge tone="info">Pro</s-badge>
+              <a className="tm-btn" href={plan.pricingUrl} target="_top" title="Downloading the complete merged theme is included in Pro">
+                Download full theme <s-badge tone="info">Pro</s-badge>
               </a>
             )}
+            {!canApply ? (
+              <a className="tm-btn tm-btn--primary" href={plan.pricingUrl} target="_top" title={applyBlockedReason}>
+                Create merged theme <s-badge tone="info">Pro</s-badge>
+              </a>
+            ) : (
             <action.Form method="post" className="tm-row">
               <input type="hidden" name="intent" value="apply" />
               <button
@@ -181,6 +193,7 @@ export default function MergePage() {
                 Apply to working copy
               </button>
             </action.Form>
+            )}
           </div>
         </div>
 
@@ -225,17 +238,16 @@ export default function MergePage() {
         {!writesEnabled && merge.status === "ready" && (
           <s-banner tone="info">
             <s-paragraph>
-              Theme writes are disabled until Shopify grants the theme-write exemption.{" "}
-              {plan.limits.export ? (
+              Creating the merged theme in your store is waiting on Shopify&apos;s theme-write exemption.{" "}
+              {plan.limits.exportFullTheme ? (
                 <>
-                  Use <strong>Download full theme</strong> and upload the zip under Online Store → Themes → Add theme → Upload zip
-                  file; Shopify creates a new unpublished theme you can preview and publish. <strong>Download changed files</strong>{" "}
-                  gives just the diff plus the matching <code>shopify theme push</code> command in MERGE-REPORT.md.
+                  In the meantime use <strong>Download full theme</strong> and upload the zip under Online Store → Themes → Add theme
+                  → Upload zip file; Shopify creates a new unpublished theme you can preview and publish.
                 </>
               ) : (
                 <>
-                  Downloading the merged theme is included in Pro, so on the Free plan there is nothing to apply the merge with until
-                  the exemption is granted.
+                  In the meantime use <strong>Download merged files</strong> — the zip contains the changed files plus the exact{" "}
+                  <code>shopify theme push</code> command in MERGE-REPORT.md.
                 </>
               )}
             </s-paragraph>

@@ -10,8 +10,9 @@ import { buildExportZip, buildFullThemeZip } from "../services/themeMerge.server
  */
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const full = new URL(request.url).searchParams.get("full") === "1";
   try {
-    await assertCanExport(admin as unknown as AdminClient, session.shop);
+    await assertCanExport(admin as unknown as AdminClient, session.shop, full);
   } catch (error) {
     if (error instanceof UpgradeRequiredError) {
       return new Response(error.message, { status: 402, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -19,7 +20,6 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     throw error;
   }
 
-  const full = new URL(request.url).searchParams.get("full") === "1";
   const { filename, bytes } = full
     ? await buildFullThemeZip(session.shop, String(params.id))
     : await buildExportZip(session.shop, String(params.id));

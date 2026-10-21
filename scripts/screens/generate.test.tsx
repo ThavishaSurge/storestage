@@ -117,7 +117,7 @@ const textMerge = mergeThemeFile({ kind: "text", base: BASE_CSS, live: LIVE_CSS,
 const proPlan = {
   plan: "pro",
   name: "Pro",
-  limits: { mergesPerMonth: null, export: true, apply: true, themeUpdateMode: true, restore: true, retention: { kind: "days", value: 90 } },
+  limits: { mergesPerMonth: null, exportChangedFiles: true, exportFullTheme: true, apply: true, themeUpdateMode: true, restore: true, retention: { kind: "days", value: 90 } },
   merges: { used: 7, limit: null, remaining: null, allowed: true },
   resetsAt: null,
   pricingUrl: "https://admin.shopify.com/store/your-store/charges/thememerge/pricing_plans",

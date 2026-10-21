@@ -13,9 +13,15 @@ export type Retention = { kind: "count"; value: number } | { kind: "days"; value
 export interface PlanLimits {
   /** Merges that may be started per calendar month. `null` is unlimited. */
   mergesPerMonth: number | null;
-  /** Downloading the merged theme (full zip and changed-files zip). */
-  export: boolean;
-  /** Writing the merged result into a theme (Apply / Create merged theme). */
+  /** Downloading the changed files plus MERGE-REPORT.md, for `shopify theme push`. */
+  exportChangedFiles: boolean;
+  /** Downloading every file of the merged theme, ready to upload as a new theme. */
+  exportFullTheme: boolean;
+  /**
+   * Writing the merged result into a theme from inside the app — "Create merged theme" (a new
+   * draft theme) and "Apply to working copy". Needs Shopify's Online Store protected-scope
+   * exemption on top of the plan; the plan alone is not enough.
+   */
   apply: boolean;
   /** Re-merging a vendor's new theme version onto a customised copy. Not built yet. */
   themeUpdateMode: boolean;
@@ -40,8 +46,9 @@ export const PLANS: Record<PlanId, Plan> = {
     priceHint: "Free",
     limits: {
       mergesPerMonth: 1,
-      export: false,
-      apply: true,
+      exportChangedFiles: true,
+      exportFullTheme: false,
+      apply: false,
       themeUpdateMode: false,
       restore: false,
       retention: { kind: "count", value: 3 },
@@ -53,7 +60,8 @@ export const PLANS: Record<PlanId, Plan> = {
     priceHint: "Paid monthly",
     limits: {
       mergesPerMonth: null,
-      export: true,
+      exportChangedFiles: true,
+      exportFullTheme: true,
       apply: true,
       themeUpdateMode: true,
       restore: true,

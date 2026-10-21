@@ -46,11 +46,16 @@ Dashboard plan can be called "Pro", "ThemeMerge Pro" or "Pro (annual)" without a
 | --- | --- | --- |
 | Compare themes (diff view) | Unlimited | Unlimited |
 | Merges (analyze + resolve) | 1 per calendar month | Unlimited |
-| Apply merge to theme | ✓ | ✓ |
-| Download merged zip | — | ✓ |
+| Download merged files (changed files + `shopify theme push` command) | ✓ | ✓ |
+| Download full merged theme (uploadable zip) | — | ✓ |
+| Create the merged theme in the store, as a draft | — | ✓ \* |
 | Automatic snapshots kept | Newest 3 | 90 days |
 | Theme update mode | — | planned |
 | One-click restore | — | planned |
+
+\* Needs Shopify's Online Store protected-scope exemption as well as the plan. Until that is
+granted the button is disabled for everyone, Pro included — the plan gate and the exemption gate
+are independent, and both must pass.
 
 Limits live in [`app/lib/billing/plans.ts`](app/lib/billing/plans.ts) — pure, unit-tested, and the
 only place to change them. Enforcement is in `services/billing.server.ts`: the merge quota is
@@ -68,10 +73,9 @@ Going live checklist:
    is refused with an upgrade link, and the download buttons are replaced by one.
 4. Subscribe to Pro on that store (test charge) and confirm the limits lift.
 
-**Open question before launch:** on Free, Apply is included but Download is not — and Apply is
-blocked for every shop until Shopify grants the theme-write exemption. Until that grant lands, a
-Free shop can run its one merge but has no way to ship the result. Either include the export on
-Free, or hold the Free plan back until the exemption is granted.
+Every plan can ship a merge today: Free downloads the changed files and pushes them with
+Shopify CLI, which needs no exemption. Pro adds the uploadable full-theme zip now, and creating
+the draft theme in-store once Shopify grants the exemption.
 
 ## Theme writes need a Shopify exemption
 

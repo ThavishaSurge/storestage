@@ -67,7 +67,21 @@ describe("snapshot retention", () => {
 
 describe("plan table", () => {
   it("matches the published Free/Pro limits", () => {
-    expect(PLANS.free.limits).toMatchObject({ mergesPerMonth: 1, export: false, apply: true, restore: false, themeUpdateMode: false });
-    expect(PLANS.pro.limits).toMatchObject({ mergesPerMonth: null, export: true, apply: true, restore: true, themeUpdateMode: true });
+    expect(PLANS.free.limits).toMatchObject({
+      mergesPerMonth: 1,
+      exportChangedFiles: true, // Free can always ship a merge via Shopify CLI
+      exportFullTheme: false,
+      apply: false,
+      restore: false,
+      themeUpdateMode: false,
+    });
+    expect(PLANS.pro.limits).toMatchObject({
+      mergesPerMonth: null,
+      exportChangedFiles: true,
+      exportFullTheme: true,
+      apply: true,
+      restore: true,
+      themeUpdateMode: true,
+    });
   });
 });

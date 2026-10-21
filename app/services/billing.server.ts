@@ -111,17 +111,25 @@ export async function assertCanStartMerge(admin: AdminClient, shop: string, now 
   }
 }
 
-export async function assertCanExport(admin: AdminClient, shop: string) {
-  const plan = await planForShop(admin, shop);
-  if (!limitsFor(plan).export) {
-    throw new UpgradeRequiredError("export", "Downloading the merged theme is a Pro feature. Upgrade to Pro to export, or apply the merge to a theme instead.");
+export async function assertCanExport(admin: AdminClient, shop: string, full: boolean) {
+  const limits = limitsFor(await planForShop(admin, shop));
+  if (full && !limits.exportFullTheme) {
+    throw new UpgradeRequiredError(
+      "exportFullTheme",
+      "Downloading the complete merged theme is a Pro feature. On Free you can download the changed files and push them with Shopify CLI.",
+    );
+  }
+  if (!full && !limits.exportChangedFiles) {
+    throw new UpgradeRequiredError("exportChangedFiles", "Downloading the merged files is not included in your plan.");
   }
 }
 
 export async function assertCanApply(admin: AdminClient, shop: string) {
-  const plan = await planForShop(admin, shop);
-  if (!limitsFor(plan).apply) {
-    throw new UpgradeRequiredError("apply", "Writing the merged result into a theme is not included in your plan.");
+  if (!limitsFor(await planForShop(admin, shop)).apply) {
+    throw new UpgradeRequiredError(
+      "apply",
+      "Creating the merged theme in your store is a Pro feature. On Free you can download the changed files and push them with Shopify CLI.",
+    );
   }
 }
 
