@@ -20,6 +20,7 @@ import {
 import type { ConflictDecision } from "../lib/merge/json3";
 import { renderWithMarkers, type HunkDecision } from "../lib/merge/text3";
 import { adminForShop, type AdminClient } from "./admin.server";
+import { assertCanStartMerge, pruneSnapshots } from "./billing.server";
 import { enqueueJob, registerJobHandler, type JobContext } from "./jobs.server";
 import {
   deleteThemeFiles,
@@ -56,6 +57,7 @@ async function createWorkingCopy(payload: Record<string, unknown>, ctx: JobConte
   await db.themeLink.create({
     data: { shop: ctx.shop, workingThemeId: copy.id, sourceThemeId: source.id, baselineSnapshotId: snapshotId },
   });
+  await pruneSnapshots(admin, ctx.shop);
   return { themeId: copy.id, themeName: copy.name, snapshotId };
 }
 
@@ -80,6 +82,7 @@ async function recordBaseline(payload: Record<string, unknown>, ctx: JobContext)
     create: { shop: ctx.shop, workingThemeId: String(payload.workingThemeId), sourceThemeId: source.id, baselineSnapshotId: snapshotId },
     update: { sourceThemeId: source.id, baselineSnapshotId: snapshotId },
   });
+  await pruneSnapshots(admin, ctx.shop);
   return { snapshotId };
 }
 
@@ -95,6 +98,7 @@ async function manualSnapshot(payload: Record<string, unknown>, ctx: JobContext)
     label: payload.label ? String(payload.label) : undefined,
     onProgress: (f) => ctx.progress(f * 0.95, "Snapshotting theme"),
   });
+  await pruneSnapshots(admin, ctx.shop);
   return { snapshotId };
 }
 
@@ -109,6 +113,7 @@ export async function startThemeMerge(args: {
   targetThemeId: string;
   baselineSnapshotId?: string | null;
 }) {
+  await assertCanStartMerge(args.admin, args.shop);
   const [live, target] = await Promise.all([getTheme(args.admin, args.liveThemeId), getTheme(args.admin, args.targetThemeId)]);
   if (!live || !target) throw new Error("Theme not found");
   if (live.id === target.id) throw new Error("Pick two different themes");
@@ -472,6 +477,7 @@ async function apply(payload: Record<string, unknown>, ctx: JobContext) {
 
   await ctx.progress(0.05, "Snapshotting the working copy (for rollback)");
   const snapshotId = await snapshotTheme({ admin, shop: ctx.shop, theme: target, reason: "pre-apply", label: `Before merge ${merge.id}` });
+  await pruneSnapshots(admin, ctx.shop);
 
   await ctx.progress(0.4, `Writing ${plan.upserts.length} files`);
   await upsertThemeFiles(admin, target.id, plan.upserts, (n) => ctx.progress(0.4 + (n / Math.max(plan.upserts.length, 1)) * 0.5));

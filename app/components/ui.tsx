@@ -198,7 +198,10 @@ export function shortId(gid: string): string {
 
 export async function downloadFile(url: string, fallbackName: string) {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).trim();
+    throw new Error(detail || `Download failed (${response.status})`);
+  }
   const blob = await response.blob();
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;

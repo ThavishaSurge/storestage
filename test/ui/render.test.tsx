@@ -44,6 +44,9 @@ const themes = [
   { id: "gid://shopify/OnlineStoreTheme/2", name: "Dawn redesign", role: "UNPUBLISHED", createdAt: now, updatedAt: now, processing: false },
 ];
 
+const freePlan = { plan: "free", name: "Free", limits: { mergesPerMonth: 1, export: false, apply: true, themeUpdateMode: false, restore: false, retention: { kind: "count", value: 3 } }, merges: { used: 1, limit: 1, remaining: 0, allowed: false }, resetsAt: "2026-11-01T00:00:00.000Z", pricingUrl: "https://admin.shopify.com/store/a/charges/thememerge/pricing_plans" };
+const proPlan = { ...freePlan, plan: "pro", name: "Pro", limits: { ...freePlan.limits, mergesPerMonth: null, export: true, restore: true, themeUpdateMode: true }, merges: { used: 9, limit: null, remaining: null, allowed: true }, resetsAt: null };
+
 describe("admin pages render", () => {
   it("overview", async () => {
     const { default: Page } = await import("../../app/routes/app._index");
@@ -52,6 +55,7 @@ describe("admin pages render", () => {
       merges: [{ id: "m1", liveThemeName: "Dawn", targetThemeName: "Redesign", status: "ready", createdAt: now }],
       workingCopies: 2,
       flags: { themeWrites: false },
+      plan: proPlan,
     });
     expect(html).toContain("ThemeMerge");
     expect(html).toContain("Redesign");
@@ -65,6 +69,7 @@ describe("admin pages render", () => {
       merges: [{ id: "m1", liveThemeName: "Dawn", targetThemeName: "Dawn redesign", status: "ready", mode: "three-way", summary: { unresolved: 2, counts: {} }, createdAt: now }],
       links: [],
       writesEnabled: false,
+      plan: freePlan,
     };
     expect(render(<Page />, data)).toContain("No baseline for this pair");
     expect(render(<Page />, { ...data, links: [{ workingThemeId: themes[1].id, sourceThemeId: themes[0].id, baselineSnapshotId: "s1" }] })).toContain("Three-way compare");
@@ -95,15 +100,20 @@ describe("admin pages render", () => {
       { filename: "snippets/gone.liquid", kind: "text", status: "live-changed", reason: "Deleted on live", resolution: "delete", resolved: true, conflictCount: 0, presence: { base: null, live: false, target: true } },
       { filename: "assets/logo.png", kind: "binary", status: "conflict", reason: "Binary file", resolution: "keep", resolved: false, conflictCount: 1, presence: { base: null, live: true, target: true } },
     ];
-    const ready = render(<Page />, { merge, files, applyJob: null, writesEnabled: false });
+    const ready = render(<Page />, { merge, files, applyJob: null, writesEnabled: false, plan: proPlan });
     expect(ready).toContain("config/settings_data.json");
     expect(ready).toContain("Download changed files");
     expect(ready).toContain("Download full theme");
     // Undecided files: the full-theme zip would contain conflict markers, so it is blocked.
     expect(ready).toContain('title="Resolve every file first"');
-    expect(render(<Page />, { merge: { ...merge, status: "analyzing" }, files: [], applyJob: null, writesEnabled: true })).toContain("Analyzing");
-    expect(render(<Page />, { merge: { ...merge, status: "applied", appliedAt: now }, files, applyJob: { id: "j2", status: "done", result: { themeName: "Dawn merged" }, error: null }, writesEnabled: true })).toContain("Dawn merged");
-    expect(render(<Page />, { merge, files, applyJob: null, writesEnabled: true }, undefined, "filter=conflict")).toContain("assets/logo.png");
+    expect(render(<Page />, { merge: { ...merge, status: "analyzing" }, files: [], applyJob: null, writesEnabled: true, plan: proPlan })).toContain("Analyzing");
+    expect(render(<Page />, { merge: { ...merge, status: "applied", appliedAt: now }, files, applyJob: { id: "j2", status: "done", result: { themeName: "Dawn merged" }, error: null }, writesEnabled: true, plan: proPlan })).toContain("Dawn merged");
+    expect(render(<Page />, { merge, files, applyJob: null, writesEnabled: true, plan: proPlan }, undefined, "filter=conflict")).toContain("assets/logo.png");
+    // Free plan: the download buttons become an upgrade link instead of failing on click.
+    const freeView = render(<Page />, { merge, files, applyJob: null, writesEnabled: false, plan: freePlan });
+    expect(freeView).toContain("Download merged theme");
+    expect(freeView).toContain("pricing_plans");
+    expect(freeView).not.toContain("Download full theme");
   });
 
   it("theme merge file page (json conflicts, text hunks, binary)", async () => {

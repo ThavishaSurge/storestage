@@ -32,6 +32,46 @@ Environment variables (set them in `.env` or your host):
 | `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | — | App credentials from the Dev Dashboard. |
 | `SHOPIFY_APP_URL` | — | Public HTTPS URL of the deployment, no trailing slash. |
 | `THEME_WRITES_ENABLED` | off | Allows theme duplication and theme file writes. Leave off until Shopify grants the exemption (below). |
+| `SHOPIFY_APP_HANDLE` | — | App handle, used to link to Shopify's hosted pricing page. Without it the upgrade link falls back to the store's apps settings. |
+
+## Plans
+
+Two plans, sold through Shopify **Managed Pricing** — the tiers are configured in the Partner
+Dashboard and Shopify owns the checkout, plan changes and proration. The app only reads the
+resulting subscription (`currentAppInstallation.activeSubscriptions`) and maps its name onto a
+plan: any active subscription whose name contains "Pro" is Pro, everything else is Free. So the
+Dashboard plan can be called "Pro", "ThemeMerge Pro" or "Pro (annual)" without a code change.
+
+| | Free | Pro |
+| --- | --- | --- |
+| Compare themes (diff view) | Unlimited | Unlimited |
+| Merges (analyze + resolve) | 1 per calendar month | Unlimited |
+| Apply merge to theme | ✓ | ✓ |
+| Download merged zip | — | ✓ |
+| Automatic snapshots kept | Newest 3 | 90 days |
+| Theme update mode | — | planned |
+| One-click restore | — | planned |
+
+Limits live in [`app/lib/billing/plans.ts`](app/lib/billing/plans.ts) — pure, unit-tested, and the
+only place to change them. Enforcement is in `services/billing.server.ts`: the merge quota is
+checked in `startThemeMerge`, exports in the export route, and retention runs after every
+automatic snapshot. **Baselines a working copy still points at are never pruned**, whatever the
+plan says — deleting one silently downgrades every later merge of that copy to timestamp
+guessing.
+
+Going live checklist:
+
+1. In the Dev Dashboard, enable Managed Pricing and create the two plans. Name the paid one so
+   it contains "Pro".
+2. Set `SHOPIFY_APP_HANDLE` so the in-app upgrade buttons reach the hosted pricing page.
+3. Install on a development store and confirm the Free limits bite: the second merge in a month
+   is refused with an upgrade link, and the download buttons are replaced by one.
+4. Subscribe to Pro on that store (test charge) and confirm the limits lift.
+
+**Open question before launch:** on Free, Apply is included but Download is not — and Apply is
+blocked for every shop until Shopify grants the theme-write exemption. Until that grant lands, a
+Free shop can run its one merge but has no way to ship the result. Either include the export on
+Free, or hold the Free plan back until the exemption is granted.
 
 ## Theme writes need a Shopify exemption
 

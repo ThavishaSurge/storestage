@@ -4,10 +4,12 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { authenticate } from "../shopify.server";
 import { themeWritesEnabled } from "../services/flags.server";
+import { planState } from "../services/billing.server";
+import type { AdminClient } from "../services/admin.server";
 import { BrandLockup, formatDate, StatusBadge } from "../components/ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const [merges, themeCount] = await Promise.all([
     db.themeMerge.findMany({
       where: { shop: session.shop },
@@ -22,11 +24,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     merges: merges.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() })),
     workingCopies: themeCount,
     flags: { themeWrites: themeWritesEnabled() },
+    plan: await planState(admin as unknown as AdminClient, session.shop),
   };
 };
 
 export default function Overview() {
-  const { merges, workingCopies, flags } = useLoaderData<typeof loader>();
+  const { merges, workingCopies, flags, plan } = useLoaderData<typeof loader>();
   return (
     <s-page heading="ThemeMerge">
       <s-section>
@@ -92,6 +95,31 @@ export default function Overview() {
           </table>
         </s-section>
       )}
+
+      <s-section slot="aside" heading="Plan">
+        <div className="tm-col">
+          <div className="tm-row">
+            <s-badge tone={plan.plan === "pro" ? "success" : "neutral"}>{plan.name}</s-badge>
+            <span>
+              {plan.merges.limit === null
+                ? "Unlimited merges"
+                : `${plan.merges.used} of ${plan.merges.limit} ${plan.merges.limit === 1 ? "merge" : "merges"} used this month`}
+            </span>
+          </div>
+          {plan.merges.limit !== null && (
+            <span className="tm-muted">
+              {plan.merges.remaining === 0
+                ? `Your quota resets ${formatDate(plan.resetsAt)}.`
+                : `Comparing themes is always unlimited; the limit is on running a merge.`}
+            </span>
+          )}
+          <div className="tm-row">
+            <a className="tm-btn" href={plan.pricingUrl} target="_top">
+              {plan.plan === "pro" ? "Manage plan" : "Upgrade to Pro"}
+            </a>
+          </div>
+        </div>
+      </s-section>
 
       <s-section slot="aside" heading="Theme writes">
         <div className="tm-col">

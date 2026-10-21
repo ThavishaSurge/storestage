@@ -114,6 +114,15 @@ const COPY_CSS = [...CSS_HEAD, ".card { border-radius: 14px; padding: 24px; box-
 const jsonMerge = mergeThemeFile({ kind: "json", base: BASE_INDEX, live: LIVE_INDEX, target: COPY_INDEX });
 const textMerge = mergeThemeFile({ kind: "text", base: BASE_CSS, live: LIVE_CSS, target: COPY_CSS });
 
+const proPlan = {
+  plan: "pro",
+  name: "Pro",
+  limits: { mergesPerMonth: null, export: true, apply: true, themeUpdateMode: true, restore: true, retention: { kind: "days", value: 90 } },
+  merges: { used: 7, limit: null, remaining: null, allowed: true },
+  resetsAt: null,
+  pricingUrl: "https://admin.shopify.com/store/your-store/charges/thememerge/pricing_plans",
+};
+
 const mergeHeader = {
   id: "m_4kz19",
   liveThemeName: "Dawn",
@@ -176,6 +185,7 @@ it("renders every screen", async () => {
       ],
       workingCopies: 2,
       flags: { themeWrites: true },
+      plan: proPlan,
     },
   });
 
@@ -198,6 +208,7 @@ it("renders every screen", async () => {
       ],
       links: [{ workingThemeId: themes[1].id, sourceThemeId: themes[0].id, baselineSnapshotId: "s1" }],
       writesEnabled: true,
+      plan: proPlan,
     },
   });
 
@@ -208,7 +219,7 @@ it("renders every screen", async () => {
     url: "admin.shopify.com/store/your-store/apps/thememerge/themes/merge/m_4kz19",
     nav: "Compare themes",
     route: "../../app/routes/app.themes.merge.$id._index",
-    data: { merge: mergeHeader, files: mergeFiles, applyJob: null, writesEnabled: true },
+    data: { merge: mergeHeader, files: mergeFiles, applyJob: null, writesEnabled: true, plan: proPlan },
     params: "filter=all",
   });
 
@@ -266,6 +277,7 @@ it("renders every screen", async () => {
       files: mergeFiles.map((f) => ({ ...f, resolved: true, conflictCount: 0, status: f.status === "conflict" ? "auto-merged" : f.status })),
       applyJob: null,
       writesEnabled: true,
+      plan: proPlan,
     },
     params: "filter=all",
   });
@@ -282,6 +294,7 @@ it("renders every screen", async () => {
       files: mergeFiles.map((f) => ({ ...f, resolved: true, conflictCount: 0, status: f.status === "conflict" ? "auto-merged" : f.status })),
       applyJob: { id: "j_9", status: "done", result: { themeId: "gid://shopify/OnlineStoreTheme/971", themeName: "Dawn — 2026 redesign merged 2026-10-18", written: 18, deleted: 0 }, error: null },
       writesEnabled: true,
+      plan: proPlan,
     },
     params: "filter=all",
   });

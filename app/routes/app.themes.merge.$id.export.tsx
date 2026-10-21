@@ -1,5 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import type { AdminClient } from "../services/admin.server";
+import { assertCanExport, UpgradeRequiredError } from "../services/billing.server";
 import { buildExportZip, buildFullThemeZip } from "../services/themeMerge.server";
 
 /**
@@ -7,7 +9,16 @@ import { buildExportZip, buildFullThemeZip } from "../services/themeMerge.server
  * Otherwise  → only the files that changed, plus MERGE-REPORT.md, for `shopify theme push`.
  */
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  try {
+    await assertCanExport(admin as unknown as AdminClient, session.shop);
+  } catch (error) {
+    if (error instanceof UpgradeRequiredError) {
+      return new Response(error.message, { status: 402, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+    throw error;
+  }
+
   const full = new URL(request.url).searchParams.get("full") === "1";
   const { filename, bytes } = full
     ? await buildFullThemeZip(session.shop, String(params.id))

@@ -40,12 +40,21 @@ export class FakeStore {
   themeFiles = new Map<string, Map<string, ThemeFile>>();
   /** Every mutation name called, for assertions. */
   log: string[] = [];
+  /** Active app subscriptions — what the billing service reads to decide the plan. */
+  subscriptions: { id: string; name: string; status: string; test: boolean; trialDays: number; currentPeriodEnd: string | null }[] = [];
+  private readonly installationId: string;
 
   constructor(
     public readonly shop: string,
     seqStart: number,
   ) {
     this.seq = seqStart;
+    this.installationId = this.gid("AppInstallation");
+  }
+
+  /** Puts the store on the paid plan. */
+  subscribePro() {
+    this.subscriptions = [{ id: this.gid("AppSubscription"), name: "ThemeMerge Pro", status: "ACTIVE", test: true, trialDays: 0, currentPeriodEnd: null }];
   }
 
   gid(type: string) {
@@ -99,6 +108,10 @@ export class FakeStore {
 
   private themeFileMeta(f: ThemeFile) {
     return { filename: f.filename, checksumMd5: md5ish(f.body), size: f.body.length, contentType: f.contentType, updatedAt: f.updatedAt };
+  }
+
+  op_ThemeMergeAppSubscriptions() {
+    return { currentAppInstallation: { id: this.installationId, activeSubscriptions: this.subscriptions } };
   }
 
   op_ThemeMergeThemes() {

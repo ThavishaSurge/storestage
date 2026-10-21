@@ -32,6 +32,7 @@ let cleanup: () => Promise<void>;
 type Services = {
   themeMerge: typeof import("../../app/services/themeMerge.server");
   themes: typeof import("../../app/services/themes.server");
+  billing: typeof import("../../app/services/billing.server");
 };
 let svc: Services;
 
@@ -42,6 +43,7 @@ beforeAll(async () => {
   svc = {
     themeMerge: await import("../../app/services/themeMerge.server"),
     themes: await import("../../app/services/themes.server"),
+    billing: await import("../../app/services/billing.server"),
   };
 }, 30_000);
 
@@ -53,6 +55,7 @@ afterAll(async () => {
 describe("theme merge", () => {
   it("merges client edits on live into the working copy", async () => {
     const shop = new FakeStore("solo.myshopify.com", 900000);
+    shop.subscribePro(); // this flow runs several merges; the Free plan allows one a month
     registerStores(shop);
     await addOfflineSession(prisma, shop.shop);
     const main = shop.addTheme(
@@ -178,5 +181,55 @@ describe("theme merge", () => {
     const by = (f: string) => merge.files.find((x) => x.filename === f)!;
     expect(by("sections/header.liquid")).toMatchObject({ status: "live-changed", resolution: "live" });
     expect(by("layout/theme.liquid")).toMatchObject({ status: "target-changed", resolution: "keep" });
+  });
+});
+
+describe("plan limits", () => {
+  it("allows one merge a month on Free, unlimited on Pro, and prunes old snapshots", async () => {
+    const shop = new FakeStore("plans.myshopify.com", 700000);
+    registerStores(shop);
+    await addOfflineSession(prisma, shop.shop);
+    const main = shop.addTheme("Dawn", "MAIN", { "layout/theme.liquid": THEME_LIQUID }, "2026-09-01T00:00:00Z");
+    const copy = shop.addTheme("Dawn copy", "UNPUBLISHED", { "layout/theme.liquid": THEME_LIQUID }, "2026-10-01T00:00:00Z");
+
+    // No subscription → Free.
+    expect(await svc.billing.planForShop(shop, shop.shop)).toBe("free");
+    const state = await svc.billing.planState(shop, shop.shop);
+    expect(state).toMatchObject({ plan: "free", name: "Free" });
+    expect(state.merges).toMatchObject({ used: 0, limit: 1, allowed: true });
+
+    const first = await svc.themeMerge.startThemeMerge({ shop: shop.shop, admin: shop, liveThemeId: main.id, targetThemeId: copy.id });
+    await waitForJob(prisma, (await prisma.themeMerge.findUniqueOrThrow({ where: { id: first } })).jobId!);
+
+    await expect(
+      svc.themeMerge.startThemeMerge({ shop: shop.shop, admin: shop, liveThemeId: main.id, targetThemeId: copy.id }),
+    ).rejects.toThrow(/Free plan includes 1 merge per month/);
+
+    // Upgrading lifts the limit immediately (the cached plan is dropped on change).
+    shop.subscribePro();
+    svc.billing.forgetPlan(shop.shop);
+    expect(await svc.billing.planForShop(shop, shop.shop)).toBe("pro");
+    const second = await svc.themeMerge.startThemeMerge({ shop: shop.shop, admin: shop, liveThemeId: main.id, targetThemeId: copy.id });
+    await waitForJob(prisma, (await prisma.themeMerge.findUniqueOrThrow({ where: { id: second } })).jobId!);
+    expect((await svc.billing.planState(shop, shop.shop)).merges).toMatchObject({ limit: null, allowed: true });
+
+    // Retention: on Free only the newest three automatic snapshots survive.
+    shop.subscriptions = [];
+    svc.billing.forgetPlan(shop.shop);
+    for (let i = 0; i < 5; i++) {
+      await prisma.themeSnapshot.create({
+        data: { shop: shop.shop, themeId: main.id, themeName: "Dawn", reason: "pre-apply", createdAt: new Date(Date.UTC(2026, 9, 1 + i)) },
+      });
+    }
+    const kept = await prisma.themeSnapshot.create({
+      data: { shop: shop.shop, themeId: main.id, themeName: "Dawn", reason: "working-copy", createdAt: new Date(Date.UTC(2020, 0, 1)) },
+    });
+    await prisma.themeLink.create({ data: { shop: shop.shop, workingThemeId: copy.id, sourceThemeId: main.id, baselineSnapshotId: kept.id } });
+
+    const pruned = await svc.billing.pruneSnapshots(shop, shop.shop);
+    expect(pruned).toBe(2);
+    const left = await prisma.themeSnapshot.findMany({ where: { shop: shop.shop }, select: { id: true } });
+    expect(left.map((s) => s.id)).toContain(kept.id); // the in-use baseline is never pruned
+    expect(left).toHaveLength(4); // 3 newest automatic + the baseline
   });
 });

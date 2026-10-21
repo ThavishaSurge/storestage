@@ -84,3 +84,21 @@ export const THEME_FILE_BODIES = `#graphql
     }
   }
 `;
+
+export interface RawAppSubscription {
+  id: string;
+  name: string;
+  status: string;
+  test: boolean;
+  trialDays: number;
+  currentPeriodEnd: string | null;
+}
+
+export const APP_SUBSCRIPTIONS = `#graphql
+  query ThemeMergeAppSubscriptions {
+    currentAppInstallation {
+      id
+      activeSubscriptions { id name status test trialDays currentPeriodEnd }
+    }
+  }
+`;

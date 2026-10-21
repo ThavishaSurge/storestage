@@ -6,6 +6,7 @@ import db from "../db.server";
 import { authenticate } from "../shopify.server";
 import { describeError, type AdminClient } from "../services/admin.server";
 import { themeWritesEnabled } from "../services/flags.server";
+import { planState, UpgradeRequiredError } from "../services/billing.server";
 import { enqueueJob } from "../services/jobs.server";
 import { startThemeMerge } from "../services/themeMerge.server";
 import { listThemes } from "../services/themes.server";
@@ -14,6 +15,7 @@ import { formatDate, JobProgress, StatusBadge } from "../components/ui";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const themes = await listThemes(admin as unknown as AdminClient);
+  const plan = await planState(admin as unknown as AdminClient, session.shop);
   const [snapshots, merges, links] = await Promise.all([
     db.themeSnapshot.findMany({
       where: { shop: session.shop },
@@ -35,6 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     merges: merges.map((m) => ({ ...m, createdAt: m.createdAt.toISOString(), summary: m.summary ? (JSON.parse(m.summary) as { unresolved: number; counts: Record<string, number> }) : null })),
     links: links.map((l) => ({ workingThemeId: l.workingThemeId, sourceThemeId: l.sourceThemeId, baselineSnapshotId: l.baselineSnapshotId })),
     writesEnabled: themeWritesEnabled(),
+    plan,
   };
 };
 
@@ -82,14 +85,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         throw new Error(`Unknown action ${intent}`);
     }
   } catch (error) {
-    return { error: describeError(error) };
+    return { error: describeError(error), upgrade: error instanceof UpgradeRequiredError };
   }
 };
 
-type ActionData = { jobId?: string; label?: string; error?: string; ok?: boolean };
+type ActionData = { jobId?: string; label?: string; error?: string; ok?: boolean; upgrade?: boolean };
 
 export default function ThemesIndex() {
-  const { themes, snapshots, merges, links, writesEnabled } = useLoaderData<typeof loader>();
+  const { themes, snapshots, merges, links, writesEnabled, plan } = useLoaderData<typeof loader>();
   const compare = useFetcher<ActionData>();
   const tools = useFetcher<ActionData>();
   const main = themes.find((t) => t.role === "MAIN");
@@ -113,6 +116,17 @@ export default function ThemesIndex() {
   return (
     <s-page heading="Compare themes">
       <s-section heading="Compare two themes">
+        {plan.merges.limit !== null && (
+          <div className="tm-row" style={{ marginBottom: 4 }}>
+            <s-badge tone={plan.merges.allowed ? "neutral" : "warning"}>{plan.name}</s-badge>
+            <span className="tm-muted">
+              {plan.merges.remaining} of {plan.merges.limit} {plan.merges.limit === 1 ? "merge" : "merges"} left this month ·{" "}
+              <a href={plan.pricingUrl} target="_top">
+                Upgrade for unlimited
+              </a>
+            </span>
+          </div>
+        )}
         <s-paragraph>
           Pick the live theme (it has the client&apos;s edits) and the working copy you want to publish. ThemeMerge finds every
           file changed on either side, merges theme-editor JSON key by key, and lists the conflicts for you to decide.
@@ -157,8 +171,15 @@ export default function ThemesIndex() {
           </div>
         </compare.Form>
         {compare.data?.error && (
-          <s-banner tone="critical">
+          <s-banner tone={compare.data.upgrade ? "info" : "critical"} heading={compare.data.upgrade ? "Merge limit reached" : undefined}>
             <s-paragraph>{compare.data.error}</s-paragraph>
+            {compare.data.upgrade && (
+              <s-paragraph>
+                <a href={plan.pricingUrl} target="_top">
+                  See plans →
+                </a>
+              </s-paragraph>
+            )}
           </s-banner>
         )}
         <div style={{ marginTop: 12 }}>
