@@ -21,7 +21,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "validate:graphql": "node scripts/validate-graphql.mjs",
-    "check": "npm run typecheck && npm run validate:graphql && npm test"
+    "check": "npm run typecheck && npm run validate:graphql && npm test",
+    "screens": "vitest run --config vitest.screens.config.ts"
   },
   "type": "module",
   "engines": {
