@@ -1,9 +1,19 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, Form, useLoaderData } from "react-router";
 
 import { login } from "../../shopify.server";
+import { BrandMark } from "../../components/ui";
 
 import styles from "./styles.module.css";
+
+export const meta: MetaFunction = () => [
+  { title: "ThemeMerge — publish your theme without losing the client's edits" },
+  {
+    name: "description",
+    content:
+      "Merge a theme working copy with the live theme a client kept editing. Theme-editor JSON merges key by key, Liquid line by line, and only the real conflicts are yours to decide.",
+  },
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -21,35 +31,36 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>StoreStage</h1>
+        <div className={styles.brand}>
+          <BrandMark size={56} />
+          <h1 className={styles.heading}>ThemeMerge</h1>
+        </div>
         <p className={styles.text}>
-          Stage changes on a copy of your store, then ship only what you approve — without overwriting
-          your client&apos;s live edits.
+          Publish your theme without losing the client&apos;s edits.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
             <label className={styles.label}>
               <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>e.g: my-shop-domain.myshopify.com</span>
+              <input className={styles.input} type="text" name="shop" placeholder="my-shop-domain.myshopify.com" />
             </label>
             <button className={styles.button} type="submit">
-              Log in
+              Install
             </button>
           </Form>
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Theme Compare</strong>. Merge a working copy with the live theme: client edits are kept,
-            theme-editor JSON merges key by key, and real conflicts are yours to decide.
+            <strong>Three-way merge</strong>. Record the fork point when the copy is made, and ThemeMerge knows
+            exactly what each side changed — no guessing from timestamps.
           </li>
           <li>
-            <strong>Clone &amp; promote</strong>. Pair a staging store, clone live into it, and promote reviewed
-            products, collections, pages, menus, metaobjects and more back to live.
+            <strong>Structural, not textual</strong>. Theme-editor JSON merges key by key, section order merges as an
+            ordered set, Liquid and CSS merge line by line.
           </li>
           <li>
-            <strong>Safe by default</strong>. Three-way diffs, staleness checks, pre-push snapshots, an audit log and
-            one-click rollback.
+            <strong>Nothing is overwritten</strong>. The live theme is never written. Take the merged result as a new
+            theme, a zip, or straight into your working copy — snapshotted first.
           </li>
         </ul>
       </div>

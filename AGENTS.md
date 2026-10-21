@@ -1,7 +1,8 @@
-# StoreStage — notes for coding agents
+# ThemeMerge — notes for coding agents
 
 Shopify embedded app (React Router 7 template, Polaris web components, Prisma/Postgres, Admin GraphQL 2026-10).
 Read README.md for the product; this file is the working map.
+Brand tokens live in `app/styles/app.css`: orange `#ff7a1a` (live side), blue `#2f6bff` (working copy), ink `#15161a`.
 
 ## Commands
 
@@ -22,21 +23,9 @@ Read README.md for the product; this file is the working map.
 - All Shopify calls go through `gql()` in `services/admin.server.ts` (throttling, typed userErrors, ACCESS_DENIED → `ShopifyAccessError`).
 - Theme writes must call `requireWrites()` (via the helpers in `services/themes.server.ts`) and never target the MAIN theme.
 
-## Adding a synced resource type
-
-1. Add the type to `RESOURCE_TYPES` (dependency order matters) and `RESOURCE_LABELS` in `lib/resources/types.ts`.
-2. Query + raw type in `lib/shopify/queries.ts`; mutations in `lib/shopify/mutations.ts`.
-3. Normalizer in `lib/resources/normalize.ts` (natural key, comparable `data`, `transfer` for non-comparable values, `aliases`
-   for sub-objects other resources may reference).
-4. Builder branch in `lib/resources/build.ts` (create/update/delete).
-5. Fetch in `services/storeData.server.ts` (`fetchFull`, and `fetchIndex` if it's referenceable).
-6. Handlers in `test/fakes/fakeShopify.ts` and coverage in `test/integration/workflow.test.ts`.
-
 ## Gotchas
 
-- GIDs differ per store: compare/store only portable data (`toPortable` / `fromPortable` in `lib/resources/refs.ts`).
 - Shopify theme JSON files start with a `/* ... */` comment; use `parseThemeJson` / `serializeThemeJson`.
-- Collections still use the deprecated `ruleSet` / `collectionAddProducts` APIs (see README limitations).
 - Prisma migrations in `prisma/migrations` are committed SQL; after changing `schema.prisma` run `npx prisma migrate dev`.
 
 Use the [Shopify AI Toolkit](https://shopify.dev/docs/apps/build/ai-toolkit) for Shopify API and platform work.

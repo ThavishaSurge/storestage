@@ -1,5 +1,5 @@
 {
-  "name": "storestage",
+  "name": "thememerge",
   "private": true,
   "scripts": {
     "build": "react-router build",

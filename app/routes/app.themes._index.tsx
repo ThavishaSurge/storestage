@@ -22,7 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       select: { id: true, themeId: true, themeName: true, reason: true, label: true, createdAt: true, _count: { select: { files: true } } },
     }),
     db.themeMerge.findMany({
-      where: { shop: session.shop, kind: "same-store" },
+      where: { shop: session.shop },
       orderBy: { createdAt: "desc" },
       take: 20,
       select: { id: true, liveThemeName: true, targetThemeName: true, status: true, mode: true, summary: true, createdAt: true },
@@ -114,15 +114,15 @@ export default function ThemesIndex() {
     <s-page heading="Theme Compare">
       <s-section heading="Compare two themes">
         <s-paragraph>
-          Pick the live theme (it has the client&apos;s edits) and the working copy you want to publish. StoreStage finds every
+          Pick the live theme (it has the client&apos;s edits) and the working copy you want to publish. ThemeMerge finds every
           file changed on either side, merges theme-editor JSON key by key, and lists the conflicts for you to decide.
         </s-paragraph>
         <compare.Form method="post">
           <input type="hidden" name="intent" value="compare" />
-          <div className="ss-row" style={{ alignItems: "flex-end", marginTop: 12 }}>
-            <label className="ss-field ss-grow">
+          <div className="tm-row" style={{ alignItems: "flex-end", marginTop: 12 }}>
+            <label className="tm-field tm-grow">
               <span>Live theme (keep its changes)</span>
-              <select className="ss-select" name="liveThemeId" value={liveId} onChange={(e) => changeLive(e.target.value)}>
+              <select className="tm-select" name="liveThemeId" value={liveId} onChange={(e) => changeLive(e.target.value)}>
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>
                     {themeOptionLabel(t)}
@@ -130,9 +130,9 @@ export default function ThemesIndex() {
                 ))}
               </select>
             </label>
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>Working copy (to publish)</span>
-              <select className="ss-select" name="targetThemeId" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+              <select className="tm-select" name="targetThemeId" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
                 {others.map((t) => (
                   <option key={t.id} value={t.id}>
                     {themeOptionLabel(t)}
@@ -140,9 +140,9 @@ export default function ThemesIndex() {
                 ))}
               </select>
             </label>
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>Baseline</span>
-              <select className="ss-select" name="baselineSnapshotId" value={baselineId} onChange={(e) => setBaselineId(e.target.value)}>
+              <select className="tm-select" name="baselineSnapshotId" value={baselineId} onChange={(e) => setBaselineId(e.target.value)}>
                 <option value="">{link ? "Automatic (recorded when the copy was made)" : "None — use timestamps"}</option>
                 {liveSnapshots.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -151,7 +151,7 @@ export default function ThemesIndex() {
                 ))}
               </select>
             </label>
-            <button className="ss-btn ss-btn--primary" type="submit" disabled={busy || !targetId}>
+            <button className="tm-btn tm-btn--primary" type="submit" disabled={busy || !targetId}>
               {busy ? "Starting…" : "Compare"}
             </button>
           </div>
@@ -164,7 +164,7 @@ export default function ThemesIndex() {
         <div style={{ marginTop: 12 }}>
           {link || baselineId ? (
             <s-banner tone="success">
-              <s-paragraph>Three-way compare: StoreStage knows exactly what each side changed since the copy was made.</s-paragraph>
+              <s-paragraph>Three-way compare: ThemeMerge knows exactly what each side changed since the copy was made.</s-paragraph>
             </s-banner>
           ) : target ? (
             <s-banner tone="info">
@@ -180,7 +180,7 @@ export default function ThemesIndex() {
 
       {merges.length > 0 && (
         <s-section heading="Recent comparisons">
-          <table className="ss-table">
+          <table className="tm-table">
             <thead>
               <tr>
                 <th>Live → working copy</th>
@@ -203,7 +203,7 @@ export default function ThemesIndex() {
                     <StatusBadge status={m.status} />
                   </td>
                   <td>{m.summary ? m.summary.unresolved : "—"}</td>
-                  <td className="ss-nowrap">{formatDate(m.createdAt)}</td>
+                  <td className="tm-nowrap">{formatDate(m.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
@@ -213,7 +213,7 @@ export default function ThemesIndex() {
 
       <s-section heading="Baselines for future merges">
         <s-paragraph>
-          A baseline is a snapshot of the live theme taken when the working copy is made. With it, StoreStage can tell a client
+          A baseline is a snapshot of the live theme taken when the working copy is made. With it, ThemeMerge can tell a client
           edit from a developer edit exactly instead of guessing from timestamps.
         </s-paragraph>
         {job && (
@@ -226,30 +226,30 @@ export default function ThemesIndex() {
             <s-paragraph>{tools.data.error}</s-paragraph>
           </s-banner>
         )}
-        <div className="ss-col" style={{ marginTop: 12 }}>
-          <tools.Form method="post" className="ss-row" style={{ alignItems: "flex-end" }}>
+        <div className="tm-col" style={{ marginTop: 12 }}>
+          <tools.Form method="post" className="tm-row" style={{ alignItems: "flex-end" }}>
             <input type="hidden" name="intent" value="workingCopy" />
             <input type="hidden" name="sourceThemeId" value={main?.id ?? ""} />
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>New working copy of {main?.name ?? "the published theme"}</span>
-              <input className="ss-input" name="name" placeholder={`${main?.name ?? "Theme"} (working copy)`} maxLength={50} />
+              <input className="tm-input" name="name" placeholder={`${main?.name ?? "Theme"} (working copy)`} maxLength={50} />
             </label>
-            <button className="ss-btn" type="submit" disabled={!writesEnabled || !main}>
+            <button className="tm-btn" type="submit" disabled={!writesEnabled || !main}>
               Duplicate + record baseline
             </button>
           </tools.Form>
           {!writesEnabled && (
-            <span className="ss-muted">
+            <span className="tm-muted">
               Duplicating needs theme write access (THEME_WRITES_ENABLED + Shopify&apos;s exemption). Until then, duplicate the theme
               in the Shopify admin and record its baseline right away below.
             </span>
           )}
-          <tools.Form method="post" className="ss-row" style={{ alignItems: "flex-end" }}>
+          <tools.Form method="post" className="tm-row" style={{ alignItems: "flex-end" }}>
             <input type="hidden" name="intent" value="recordBaseline" />
             <input type="hidden" name="sourceThemeId" value={main?.id ?? ""} />
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>I just duplicated it myself — record the baseline for</span>
-              <select className="ss-select" name="workingThemeId" defaultValue={others[0]?.id}>
+              <select className="tm-select" name="workingThemeId" defaultValue={others[0]?.id}>
                 {themes
                   .filter((t) => t.role !== "MAIN")
                   .map((t) => (
@@ -259,16 +259,16 @@ export default function ThemesIndex() {
                   ))}
               </select>
             </label>
-            <button className="ss-btn" type="submit" disabled={!main}>
+            <button className="tm-btn" type="submit" disabled={!main}>
               Record baseline
             </button>
           </tools.Form>
-          <span className="ss-muted">Only correct if nobody has edited the live theme since the copy was made.</span>
-          <tools.Form method="post" className="ss-row" style={{ alignItems: "flex-end" }}>
+          <span className="tm-muted">Only correct if nobody has edited the live theme since the copy was made.</span>
+          <tools.Form method="post" className="tm-row" style={{ alignItems: "flex-end" }}>
             <input type="hidden" name="intent" value="snapshot" />
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>Snapshot a theme now</span>
-              <select className="ss-select" name="themeId" defaultValue={main?.id}>
+              <select className="tm-select" name="themeId" defaultValue={main?.id}>
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
@@ -276,11 +276,11 @@ export default function ThemesIndex() {
                 ))}
               </select>
             </label>
-            <label className="ss-field ss-grow">
+            <label className="tm-field tm-grow">
               <span>Label (optional)</span>
-              <input className="ss-input" name="label" placeholder="Before Black Friday" />
+              <input className="tm-input" name="label" placeholder="Before Black Friday" />
             </label>
-            <button className="ss-btn" type="submit">
+            <button className="tm-btn" type="submit">
               Take snapshot
             </button>
           </tools.Form>
@@ -289,7 +289,7 @@ export default function ThemesIndex() {
 
       {snapshots.length > 0 && (
         <s-section heading="Snapshots">
-          <table className="ss-table">
+          <table className="tm-table">
             <thead>
               <tr>
                 <th>Theme</th>
@@ -304,16 +304,16 @@ export default function ThemesIndex() {
                 <tr key={s.id}>
                   <td>
                     {s.themeName}
-                    {s.label && <div className="ss-muted">{s.label}</div>}
+                    {s.label && <div className="tm-muted">{s.label}</div>}
                   </td>
                   <td>{s.reason}</td>
                   <td>{s.files}</td>
-                  <td className="ss-nowrap">{formatDate(s.createdAt)}</td>
+                  <td className="tm-nowrap">{formatDate(s.createdAt)}</td>
                   <td>
                     <tools.Form method="post">
                       <input type="hidden" name="intent" value="deleteSnapshot" />
                       <input type="hidden" name="snapshotId" value={s.id} />
-                      <button className="ss-btn ss-btn--small" type="submit">
+                      <button className="tm-btn tm-btn--small" type="submit">
                         Delete
                       </button>
                     </tools.Form>

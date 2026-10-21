@@ -4,7 +4,7 @@ import { purgeShopData } from "../services/privacy.server";
 
 /**
  * Mandatory compliance webhooks.
- * StoreStage never reads or stores customer data, so customer requests have nothing to return or erase.
+ * ThemeMerge never reads or stores customer data, so customer requests have nothing to return or erase.
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { topic, shop } = await authenticate.webhook(request);

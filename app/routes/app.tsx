@@ -22,8 +22,7 @@ export default function App() {
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
         <s-link href="/app">Overview</s-link>
-        <s-link href="/app/themes">Theme Compare</s-link>
-        <s-link href="/app/staging">Staging</s-link>
+        <s-link href="/app/themes">Compare themes</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

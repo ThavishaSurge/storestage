@@ -1,10 +1,9 @@
 /**
- * Theme Compare: analysis, decisions, export and apply.
+ * ThemeMerge: analysis, decisions, export and apply.
  */
 import { zipSync, strToU8 } from "fflate";
 import db from "../db.server";
 import {
-  buildPromotePlan,
   buildWritePlan,
   classifyFiles,
   compareMode,
@@ -109,31 +108,22 @@ export async function startThemeMerge(args: {
   liveThemeId: string;
   targetThemeId: string;
   baselineSnapshotId?: string | null;
-  /** Cross-store: the live theme is on `liveShop`, the target (staging) theme on `targetShop`. */
-  crossStore?: { liveShop: string; targetShop: string; liveAdmin: AdminClient; targetAdmin: AdminClient; pairId: string };
 }) {
-  const liveAdmin = args.crossStore?.liveAdmin ?? args.admin;
-  const targetAdmin = args.crossStore?.targetAdmin ?? args.admin;
-  const [live, target] = await Promise.all([getTheme(liveAdmin, args.liveThemeId), getTheme(targetAdmin, args.targetThemeId)]);
+  const [live, target] = await Promise.all([getTheme(args.admin, args.liveThemeId), getTheme(args.admin, args.targetThemeId)]);
   if (!live || !target) throw new Error("Theme not found");
-  if (!args.crossStore && live.id === target.id) throw new Error("Pick two different themes");
+  if (live.id === target.id) throw new Error("Pick two different themes");
 
   let baselineSnapshotId = args.baselineSnapshotId || null;
-  if (!baselineSnapshotId && !args.crossStore) {
+  if (!baselineSnapshotId) {
     const link = await db.themeLink.findUnique({ where: { shop_workingThemeId: { shop: args.shop, workingThemeId: target.id } } });
     if (link && link.sourceThemeId === live.id) baselineSnapshotId = link.baselineSnapshotId;
   }
-  // Cross-store merges have no shared fork time: without a baseline they are plain two-way.
-  const forkTime = args.crossStore ? null : new Date(target.createdAt);
+  const forkTime = new Date(target.createdAt);
   const mode = compareMode({ base: baselineSnapshotId ? new Map() : null, forkTime });
 
   const merge = await db.themeMerge.create({
     data: {
       shop: args.shop,
-      kind: args.crossStore ? "cross-store" : "same-store",
-      liveShop: args.crossStore?.liveShop ?? args.shop,
-      targetShop: args.crossStore?.targetShop ?? args.shop,
-      pairId: args.crossStore?.pairId ?? null,
       liveThemeId: live.id,
       liveThemeName: live.name,
       targetThemeId: target.id,
@@ -150,14 +140,12 @@ export async function startThemeMerge(args: {
 
 async function analyze(payload: Record<string, unknown>, ctx: JobContext) {
   const merge = await db.themeMerge.findFirstOrThrow({ where: { id: String(payload.mergeId), shop: ctx.shop } });
-  const liveAdmin = await adminForShop(merge.liveShop);
-  const targetAdmin = merge.targetShop === merge.liveShop ? liveAdmin : await adminForShop(merge.targetShop);
-  const crossStore = merge.kind === "cross-store";
+  const admin = await adminForShop(ctx.shop);
   try {
     await ctx.progress(0.02, "Listing files");
     const [live, target, base] = await Promise.all([
-      fetchThemeFileMeta(liveAdmin, merge.liveThemeId),
-      fetchThemeFileMeta(targetAdmin, merge.targetThemeId),
+      fetchThemeFileMeta(admin, merge.liveThemeId),
+      fetchThemeFileMeta(admin, merge.targetThemeId),
       merge.baselineSnapshotId ? loadSnapshotMeta(merge.baselineSnapshotId) : Promise.resolve(null),
     ]);
     const plans = classifyFiles({ base, live, target, forkTime: merge.forkTime });
@@ -165,12 +153,11 @@ async function analyze(payload: Record<string, unknown>, ctx: JobContext) {
 
     // Bodies: live + target for every changed file (binary included, for applying "take live").
     const needLive = relevant.filter((p) => p.presence.live).map((p) => p.filename);
-    // Cross-store promotions also copy binary assets from staging, so fetch those bodies too.
-    const needTarget = relevant.filter((p) => p.presence.target && (crossStore || p.kind !== "binary")).map((p) => p.filename);
+    const needTarget = relevant.filter((p) => p.presence.target && p.kind !== "binary").map((p) => p.filename);
     await ctx.progress(0.1, `Downloading ${needLive.length + needTarget.length} changed files`);
     const total = Math.max(needLive.length + needTarget.length, 1);
-    const liveBodies = await fetchThemeFileBodies(liveAdmin, merge.liveThemeId, needLive, (n) => ctx.progress(0.1 + (n / total) * 0.7));
-    const targetBodies = await fetchThemeFileBodies(targetAdmin, merge.targetThemeId, needTarget, (n) =>
+    const liveBodies = await fetchThemeFileBodies(admin, merge.liveThemeId, needLive, (n) => ctx.progress(0.1 + (n / total) * 0.7));
+    const targetBodies = await fetchThemeFileBodies(admin, merge.targetThemeId, needTarget, (n) =>
       ctx.progress(0.1 + ((needLive.length + n) / total) * 0.7),
     );
     const baseBodies = merge.baselineSnapshotId
@@ -335,10 +322,9 @@ async function resolvedFiles(mergeId: string) {
   }));
 }
 
-/** Writes needed: relative to the working copy (same-store) or to the live theme (cross-store). */
-function writePlanFor(kind: string, files: Awaited<ReturnType<typeof resolvedFiles>>): WritePlan {
-  const resolved = files.map((f) => f.resolved);
-  return kind === "cross-store" ? buildPromotePlan(resolved) : buildWritePlan(resolved);
+/** Writes needed, relative to the working copy. */
+function writePlanFor(files: Awaited<ReturnType<typeof resolvedFiles>>): WritePlan {
+  return buildWritePlan(files.map((f) => f.resolved));
 }
 
 /**
@@ -349,7 +335,7 @@ function writePlanFor(kind: string, files: Awaited<ReturnType<typeof resolvedFil
 export async function buildExportZip(shop: string, mergeId: string): Promise<{ filename: string; bytes: Uint8Array }> {
   const merge = await db.themeMerge.findFirstOrThrow({ where: { id: mergeId, shop } });
   const files = await resolvedFiles(mergeId);
-  const plan = writePlanFor(merge.kind, files);
+  const plan = writePlanFor(files);
   const entries: Record<string, Uint8Array> = {};
   const unresolved: string[] = [];
 
@@ -368,12 +354,12 @@ export async function buildExportZip(shop: string, mergeId: string): Promise<{ f
   const report = [
     `# Theme merge report`,
     ``,
-    `- Live theme: **${merge.liveThemeName}** (${merge.liveThemeId}) on ${merge.liveShop}`,
-    `- ${merge.kind === "cross-store" ? "Staging theme" : "Working copy"}: **${merge.targetThemeName}** (${merge.targetThemeId}) on ${merge.targetShop}`,
+    `- Live theme: **${merge.liveThemeName}** (${merge.liveThemeId})`,
+    `- Working copy: **${merge.targetThemeName}** (${merge.targetThemeId})`,
     `- Mode: ${merge.mode}`,
     `- Generated: ${new Date().toISOString()}`,
     ``,
-    `## Files to write into ${merge.kind === "cross-store" ? "a copy of the live theme" : "the working copy"} (${plan.upserts.length})`,
+    `## Files to write into the working copy (${plan.upserts.length})`,
     ...plan.upserts.map((u) => `- ${u.filename}`),
     ``,
     `## Files to delete (${plan.deletes.length})`,
@@ -385,10 +371,8 @@ export async function buildExportZip(shop: string, mergeId: string): Promise<{ f
     `## Push with Shopify CLI`,
     "```",
     `cd theme`,
-    merge.kind === "cross-store"
-      ? `# First duplicate the live theme on ${merge.liveShop}, then push into the duplicate:`
-      : `# Push into the working copy:`,
-    `shopify theme push --store ${merge.kind === "cross-store" ? merge.liveShop : merge.targetShop} --theme ${merge.kind === "cross-store" ? "<duplicate-theme-id>" : merge.targetThemeId.split("/").pop()} --nodelete${plan.upserts.length ? ` --only ${plan.upserts.map((u) => u.filename).join(" --only ")}` : ""}`,
+    `# Push into the working copy:`,
+    `shopify theme push --store ${merge.shop} --theme ${merge.targetThemeId.split("/").pop()} --nodelete${plan.upserts.length ? ` --only ${plan.upserts.map((u) => u.filename).join(" --only ")}` : ""}`,
     "```",
     plan.deletes.length ? `Then delete these files in the code editor: ${plan.deletes.join(", ")}` : "",
   ].join("\n");
@@ -405,7 +389,7 @@ export async function buildExportZip(shop: string, mergeId: string): Promise<{ f
  * Where a same-store merge is written:
  *   "in-place"  overwrite the working copy (snapshotted first, so it can be rolled back)
  *   "new-copy"  duplicate the working copy and write the merged result into the duplicate,
- *               leaving the working copy untouched. Cross-store merges always make a new copy.
+ *               leaving the working copy untouched.
  */
 export type ApplyMode = "in-place" | "new-copy";
 
@@ -424,11 +408,9 @@ export async function buildFullThemeZip(shop: string, mergeId: string): Promise<
   const undecided = await db.themeMergeFile.count({ where: { mergeId, resolved: false } });
   if (undecided) throw new Error(`${undecided} file(s) still need a decision before a full theme can be built`);
 
-  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
-  // The plan is expressed against the theme it would have been written to.
-  const baseShop = merge.kind === "cross-store" ? merge.liveShop : merge.targetShop;
-  const baseThemeId = merge.kind === "cross-store" ? merge.liveThemeId : merge.targetThemeId;
-  const admin = await adminForShop(baseShop);
+  const plan = writePlanFor(await resolvedFiles(merge.id));
+  const baseThemeId = merge.targetThemeId; // the plan is expressed against the working copy
+  const admin = await adminForShop(merge.shop);
 
   const upserts = new Map(plan.upserts.map((u) => [u.filename, u]));
   const deletes = new Set(plan.deletes);
@@ -469,13 +451,12 @@ export async function startApply(shop: string, mergeId: string, mode: ApplyMode 
 
 async function apply(payload: Record<string, unknown>, ctx: JobContext) {
   const merge = await db.themeMerge.findFirstOrThrow({ where: { id: String(payload.mergeId), shop: ctx.shop } });
-  if (merge.kind === "cross-store") return applyCrossStore(merge, ctx);
-  const admin = await adminForShop(merge.targetShop);
+  const admin = await adminForShop(ctx.shop);
   const target = await getTheme(admin, merge.targetThemeId);
   if (!target) throw new Error("Working copy no longer exists");
   if (target.role === "MAIN") throw new Error("The working copy has been published; merges are only applied to unpublished themes");
 
-  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
+  const plan = writePlanFor(await resolvedFiles(merge.id));
   if (payload.mode === "new-copy") {
     // The write plan is expressed relative to the working copy, and a duplicate starts out
     // identical to it, so the same upserts/deletes yield the merged theme.
@@ -503,25 +484,6 @@ async function apply(payload: Record<string, unknown>, ctx: JobContext) {
 function stampedThemeName(base: string, label: string) {
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
   return `${base} ${label} ${stamp}`.slice(0, 50);
-}
-
-/**
- * Cross-store: never touches the published live theme. Duplicates it on the live shop and writes
- * the merged result into the duplicate, which the merchant previews and publishes.
- */
-async function applyCrossStore(merge: { id: string; liveShop: string; liveThemeId: string; liveThemeName: string; kind: string }, ctx: JobContext) {
-  const admin = await adminForShop(merge.liveShop);
-  const live = await getTheme(admin, merge.liveThemeId);
-  if (!live) throw new Error("Live theme no longer exists");
-  const plan = writePlanFor(merge.kind, await resolvedFiles(merge.id));
-  await ctx.progress(0.05, "Duplicating the live theme");
-  const copy = await duplicateTheme(admin, live.id, stampedThemeName(live.name, "+ staging"));
-  await waitForTheme(admin, copy.id);
-  await ctx.progress(0.3, `Writing ${plan.upserts.length} files`);
-  await upsertThemeFiles(admin, copy.id, plan.upserts, (n) => ctx.progress(0.3 + (n / Math.max(plan.upserts.length, 1)) * 0.6));
-  if (plan.deletes.length) await deleteThemeFiles(admin, copy.id, plan.deletes);
-  await db.themeMerge.update({ where: { id: merge.id }, data: { status: "applied", appliedAt: new Date() } });
-  return { themeId: copy.id, themeName: copy.name, written: plan.upserts.length, deleted: plan.deletes.length };
 }
 
 async function waitForTheme(admin: AdminClient, themeId: string) {

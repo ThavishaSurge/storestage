@@ -1,15 +1,13 @@
-# StoreStage
+# ThemeMerge
 
-A Shopify app for staging changes safely.
+**Publish your theme without losing the client's edits.**
 
-- **Theme Compare** (single store): the client edited the live theme while you worked on a copy. StoreStage finds every file
-  either side changed, merges theme-editor JSON (`templates/*.json`, section groups, `settings_data.json`) key by key, merges
-  Liquid/CSS/JS line by line, and leaves only the real conflicts for you to decide. Then it writes the result into your copy
-  (or gives you a zip to push with Shopify CLI).
-- **Staging** (two stores): pair a staging store with the live store, clone live into staging, make changes there, review a
-  three-way diff (staging vs live vs the clone baseline), and promote only what you approve. Client edits on live are never
-  overwritten silently. Every promotion takes a pre-push snapshot and can be rolled back. Store-level settings
-  (currency, tax, units, order numbering, policies…) are compared read-only, since apps can't change most of them.
+The client kept editing the live theme while you built a redesign on a copy. Publishing your copy would silently throw
+their work away. ThemeMerge finds every file either side changed, merges theme-editor JSON key by key and Liquid, CSS and
+JS line by line, and leaves only the real conflicts for you to decide. Then it hands you the merged theme — as a new
+theme, a zip you can upload, or written straight into your working copy.
+
+The live theme is never written.
 
 Built on Shopify's official React Router app template, Admin GraphQL API **2026-10**.
 
@@ -17,8 +15,8 @@ Built on Shopify's official React Router app template, Admin GraphQL API **2026-
 
 ## Quick start
 
-Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/apps/tools/cli), a Postgres database, a Partner account,
-and two development stores if you want to try Staging. Set `DATABASE_URL` before running anything (see `.env`).
+Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/apps/tools/cli), a Postgres database, a Partner
+account, and a development store. Set `DATABASE_URL` before running anything (see `.env`).
 
 ```bash
 npm install
@@ -26,88 +24,49 @@ npm run config:link      # create or link the app in your Partner/Dev Dashboard 
 npm run dev              # runs migrations, starts the app, opens the install URL for your dev store
 ```
 
-To use **Staging**, install the app on the second store as well (Dev Dashboard → your app → Test on development store, or
-switch stores with `shopify app dev --reset`). Then open **Staging** in one store, generate a pairing code, and enter it in
-the other.
-
 Environment variables (set them in `.env` or your host):
 
 | Variable | Default | What it does |
 | --- | --- | --- |
+| `DATABASE_URL` | — | Postgres connection string. Required. |
+| `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | — | App credentials from the Dev Dashboard. |
+| `SHOPIFY_APP_URL` | — | Public HTTPS URL of the deployment, no trailing slash. |
 | `THEME_WRITES_ENABLED` | off | Allows theme duplication and theme file writes. Leave off until Shopify grants the exemption (below). |
-| `PUBLISH_CREATED_TO_ONLINE_STORE` | `true` | Publish products/collections that a promotion *creates* on live to the Online Store channel. |
 
 ## Theme writes need a Shopify exemption
 
-Reading theme files works with `read_themes`. **Writing** them (`themeFilesUpsert`, `themeFilesDelete`) requires
-`write_themes` *plus* Shopify's "Online Store protected scope" exemption, which is reviewed per app (dev, staging and
-production apps each need their own request). Shopify says it responds within two weeks.
+Reading theme files works with `read_themes`. **Writing** them (`themeFilesUpsert`, `themeFilesDelete`, `themeDuplicate`)
+requires `write_themes` *plus* Shopify's "Online Store protected scope" exemption, which is reviewed per app (dev,
+staging and production apps each need their own request). Shopify says it responds within two weeks.
 
-StoreStage fits two listed categories: *developer tooling and testing* and *backups* (it snapshots themes before every
+ThemeMerge fits two listed categories: *developer tooling and testing* and *backups* (it snapshots themes before every
 write and can restore). A draft of the request is in [`docs/theme-exemption-request.md`](docs/theme-exemption-request.md).
 
-Until it's granted, everything still works except the "Apply" buttons: compare, decide, then export.
-**Download full theme** gives every file of the merged theme at the root of the zip — upload it under Online Store → Themes →
-Add theme → Upload zip file and Shopify creates a new unpublished theme to preview and publish, no CLI needed. It reads the
-whole theme (binary assets included), so it takes a while and needs every file decided first. **Download changed files** gives
-only the diff, in theme layout, plus `MERGE-REPORT.md` with the exact `shopify theme push --only …` command.
+Until it's granted everything works except the two Apply buttons. Compare, decide, then export:
+
+- **Download full theme** — every file of the merged theme at the root of the zip. Upload it under Online Store → Themes →
+  Add theme → Upload zip file and Shopify creates a new unpublished theme to preview and publish, no CLI needed. It reads
+  the whole theme (binary assets included), so it takes a while and needs every file decided first.
+- **Download changed files** — only the diff, in theme layout, plus `MERGE-REPORT.md` with the exact
+  `shopify theme push --only …` command.
+
 Without the exemption, also duplicate themes in the Shopify admin and click **Record baseline** right after, so later
 merges are three-way.
 
 ## How it works
 
-### Theme Compare
-
-1. You pick the **live** theme (has client edits) and the **working copy** (to publish).
-2. If the copy was made by StoreStage, or you recorded a baseline when you duplicated it, the merge is **three-way**:
-   StoreStage knows exactly what each side changed since the fork. Otherwise it falls back to **timestamps** (anything
+1. You pick the **live** theme (it has the client's edits) and the **working copy** (the one you want to publish).
+2. If the copy was made by ThemeMerge, or you recorded a baseline when you duplicated it, the merge is **three-way**:
+   ThemeMerge knows exactly what each side changed since the fork. Otherwise it falls back to **timestamps** (anything
    edited after the copy's `createdAt` counts as changed on that side).
 3. Per file: changed only on live → take live; changed only in the copy → keep; changed on both → merge
    (JSON structurally, text with diff3). Ordered arrays like a template's `order` or a section's `block_order` merge as
    ordered sets, so a section the client added and a section you added both survive.
-4. You resolve what's left per conflict (live / copy / both), per file, or by editing the result by hand.
+4. You resolve what's left per conflict, per file, or by editing the result by hand.
 5. Finish either way: **Apply to working copy** snapshots it first (for rollback) and writes the merged files into it, or
-   **Create merged theme** duplicates the working copy and writes the merged result into the duplicate, leaving the working
-   copy untouched — preview it, then publish. The live theme is never written. If the store's 20-theme library is full,
-   the duplicate fails before anything is written: delete an old theme and apply again.
-
-### Staging
-
-```
-          clone (baseline)                         promote (selected changes)
-  LIVE ───────────────────────▶ STAGING ── edits ──▶ three-way diff ──────────────▶ LIVE
-    ▲                                                     │
-    └── client edits (drift) ────── shown, never overwritten
-```
-
-- **Portable references.** Every Shopify GID is store-specific. Before comparing, StoreStage replaces each GID with a
-  placeholder built from the referenced resource's natural key (`@@ref:product:linen-shirt@@`), including inside metafield
-  values, menu items, collection membership and metafield-definition validations. On write, placeholders become the
-  target store's GIDs. That's what makes a menu cloned to staging point at staging's collections, and a metaobject
-  reference promoted to live point at live's metaobject.
-- **Natural keys.** Products, collections, pages, blogs, menus: handle. Articles: `blog/handle`. Metaobjects:
-  `type/handle`. Redirects: path. Metafield definitions: `OWNER:namespace.key`. Files: CDN filename (Shopify's duplicate
-  suffix removed). Variants: option values.
-- **Three-way diff.** For each resource: changed only on staging → promotable; changed only on live → drift (info only);
-  changed on both → field-level merge, clashing fields become conflicts you decide (keep live / use staging).
-- **Safe promotion.** Live is re-read right before writing; anything that changed since the comparison is skipped with an
-  explanation. A pre-push snapshot is saved, writes run in dependency order (definitions → files → metaobjects → products
-  → collections → content → menus → redirects; deletes last, in reverse), variants and media are updated in place, and the
-  baseline advances so promoted changes don't show up again.
-- **Rollback** restores updated resources from the pre-push snapshot, deletes resources the promotion created, and
-  recreates ones it deleted.
-- **Themes across stores** reuse the Theme Compare engine with the clone-time theme snapshot as the baseline. Applying
-  duplicates live's published theme and writes the merged result into the duplicate. You preview and publish it.
-
-### What's synced
-
-| Synced | Not synced (by design or not yet) |
-| --- | --- |
-| Products (options, variants, prices, SKUs, barcodes, media, metafields) | Orders, customers, inventory levels |
-| Collections (manual membership and smart rules), pages, blogs, blog posts | Discounts, markets, translations, shipping, taxes |
-| Navigation menus, URL redirects, files | Store settings (compared read-only), payment/checkout, notifications |
-| Metafield definitions, metaobject definitions, metaobjects | Variant metafields, app-owned metafields/metaobjects |
-| Published theme (via theme merge) | Third-party app configuration |
+   **Create merged theme** duplicates the working copy and writes the merged result into the duplicate, leaving the
+   working copy untouched — preview it, then publish. If the store's 20-theme library is full, the duplicate fails before
+   anything is written: delete an old theme and apply again.
 
 ## Project layout
 
@@ -117,18 +76,28 @@ app/
     merge/json3.ts         Three-way JSON merge (ordered-set arrays, conflict paths, decisions)
     merge/text3.ts         diff3 text merge, two-way hunk picking, conflict markers
     theme/compare.ts       Theme file classification (three-way / timestamp), file merge, write plans
-    resources/             Store resources: normalizers, portable refs, three-way diff, mutation builders
     shopify/               GraphQL documents (validated against the 2026-10 schema)
-  services/                Server side: Shopify client wrapper, jobs, snapshots, theme merges, staging, pairing
+  services/                Server side: Shopify client wrapper, jobs, snapshots, theme merges
   routes/                  Embedded admin UI (Polaris web components) and webhooks
 prisma/                    Schema + migrations (Postgres)
 test/                      Fake Shopify Admin API + end-to-end workflow tests
 docs/                      Exemption request draft
 ```
 
-Long operations (theme analysis, clone, compare, promote, rollback) run as **jobs** stored in the database and executed by
-an in-process worker (`app/services/jobs.server.ts`). The UI polls job progress. For more than one app instance, swap the
-worker for a real queue; handler signatures stay the same.
+Long operations (theme analysis, apply) run as **jobs** stored in the database and executed by an in-process worker
+(`app/services/jobs.server.ts`). The UI polls job progress. The worker requeues anything left `running` at boot, so run a
+single instance of the app; for more than one, swap the worker for a real queue — handler signatures stay the same.
+
+## Brand
+
+The mark is an orange stroke and a blue stroke meeting in one ink stem: the live theme, the working copy, the merged
+result. The UI uses the same mapping — orange marks the live side of a conflict, blue the working copy, ink the outcome.
+
+| Token | Hex |
+| --- | --- |
+| Orange | `#ff7a1a` |
+| Blue | `#2f6bff` |
+| Ink | `#15161a` |
 
 ## Development
 
@@ -139,31 +108,23 @@ npm run validate:graphql  # every #graphql document vs the Admin API 2026-10 sch
 npm run build
 ```
 
-The end-to-end suite (`test/integration`) pairs two simulated stores, clones, edits both sides, compares, resolves a
-conflict, promotes, checks the staleness guard, rolls back, and runs both theme flows — against a real Postgres database
-created from the committed migrations, run in-process with PGlite so no database server is needed. Set `DATABASE_URL_TEST`
-to run the suite against a real Postgres instead.
+The end-to-end suite (`test/integration`) duplicates a theme, records a baseline, edits both sides, compares, resolves a
+conflict, exports, and applies both in place and into a fresh copy — against a real Postgres database created from the
+committed migrations, run in-process with PGlite so no database server is needed. Set `DATABASE_URL_TEST` to run the
+suite against a real Postgres instead.
 
 ## Status and known limitations
 
-**Verified:** typecheck, lint, production build; all GraphQL validated against the 2026-10 schema; 58 tests — unit,
-end-to-end against a simulated Admin API, and server-rendering of every admin page. **Not yet verified against real stores** — do the first-run checklist below on two
-development stores before using it on a client.
+**Not yet verified against real stores** — do the first-run checklist below on a development store before using it on a
+client.
 
 First-run checklist:
-1. Theme Compare on one store: duplicate the theme, record the baseline, edit both, compare, download the zip.
-2. Pair two dev stores, clone with a handful of products, check staging (variants, images, menus, metaobject references).
-3. Edit staging and live, compare, promote two or three items, check live, roll back.
-4. Once the exemption is granted: `THEME_WRITES_ENABLED=true`, apply a theme merge, and a cross-store theme promotion.
+1. Duplicate the live theme, record the baseline, edit both sides, compare, download the full theme zip, upload it.
+2. Check the merged theme in the theme editor: section order, settings, and any section the client added.
+3. Once the exemption is granted: `THEME_WRITES_ENABLED=true`, then Create merged theme and Apply to working copy.
 
 Known limitations / next steps:
-- **Collections** use `ruleSet`, `collectionAddProducts` and `collectionRemoveProducts`, which are deprecated in 2026-10
-  in favour of the new collection `sources` model. They still work in this version; migrate before upgrading the API.
-- Variant barcodes are read through the deprecated `barcode` field to keep query cost down.
-- Manual collections: the first 250 products are compared. Products: >50 variants are paged in automatically.
-- Large catalogs are read with paginated queries (a few products per request). For many thousands of products, switch
-  reads to bulk operations.
-- Metaobject fields cleared on staging aren't cleared on live (values are upserted, not removed).
-- Rollback recreates deleted resources with new GIDs; references to them elsewhere aren't restored.
+- The full-theme zip reads every file of the theme, downloading binary assets one at a time. On a large theme it is slow;
+  move it behind a job with progress if that becomes a problem.
+- Shopify's zip upload has a 50 MB limit. For a theme with heavy assets, use the changed-files zip and `shopify theme push`.
 - Theme snapshots store full file bodies, so the database grows with every snapshot — prune old ones periodically.
-- The job worker runs in-process and requeues anything left `running` at boot, so run a single instance of the app.

@@ -14,7 +14,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // Stop any queued work for this shop; snapshots are kept until shop/redact in case of reinstall.
   await db.job.updateMany({ where: { shop, status: { in: ["queued", "running"] } }, data: { status: "failed", error: "App uninstalled" } });
-  await db.pairingCode.deleteMany({ where: { shop } });
 
   return new Response();
 };

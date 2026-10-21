@@ -3,6 +3,42 @@ import { useFetcher, useRevalidator } from "react-router";
 import type { DiffRow } from "../lib/merge/lineDiff";
 
 // ---------------------------------------------------------------------------
+// Brand
+// ---------------------------------------------------------------------------
+
+/**
+ * The ThemeMerge mark: an orange stroke (the live theme) and a blue stroke (the working copy)
+ * meeting in one ink-coloured stem (the merged result).
+ */
+export function BrandMark({ size = 28, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      role="img"
+      aria-label="ThemeMerge"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M18 82 V32 L50 62" stroke="#ff7a1a" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M82 82 V32 L50 62" stroke="#2f6bff" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M50 62 V82" stroke="#15161a" strokeWidth="16" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function BrandLockup() {
+  return (
+    <span className="tm-brand">
+      <BrandMark className="tm-brand__mark" />
+      <span className="tm-brand__name">ThemeMerge</span>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Job progress (polls /app/jobs/:id)
 // ---------------------------------------------------------------------------
 
@@ -41,7 +77,7 @@ export function JobProgress({ jobId, label, onDone }: { jobId: string; label?: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job?.status]);
 
-  if (!job) return <div className="ss-muted">Starting…</div>;
+  if (!job) return <div className="tm-muted">Starting…</div>;
   if (job.status === "failed") {
     return (
       <s-banner tone="critical" heading={`${label ?? "Job"} failed`}>
@@ -51,13 +87,13 @@ export function JobProgress({ jobId, label, onDone }: { jobId: string; label?: s
   }
   if (job.status === "done") return null;
   return (
-    <div className="ss-col">
-      <div className="ss-row">
+    <div className="tm-col">
+      <div className="tm-row">
         <s-spinner size="base" accessibilityLabel="Working" />
         <strong>{label ?? "Working"}</strong>
-        <span className="ss-muted">{job.message ?? (job.status === "queued" ? "Queued" : "Running")}</span>
+        <span className="tm-muted">{job.message ?? (job.status === "queued" ? "Queued" : "Running")}</span>
       </div>
-      <div className="ss-progress" aria-label={`${job.progress}%`}>
+      <div className="tm-progress" aria-label={`${job.progress}%`}>
         <div style={{ width: `${Math.max(job.progress, 3)}%` }} />
       </div>
     </div>
@@ -69,9 +105,9 @@ export function JobProgress({ jobId, label, onDone }: { jobId: string; label?: s
 // ---------------------------------------------------------------------------
 
 export function DiffView({ rows, empty = "No differences" }: { rows: DiffRow[]; empty?: string }) {
-  if (!rows.some((r) => r.type === "add" || r.type === "del")) return <div className="ss-muted">{empty}</div>;
+  if (!rows.some((r) => r.type === "add" || r.type === "del")) return <div className="tm-muted">{empty}</div>;
   return (
-    <div className="ss-diff">
+    <div className="tm-diff">
       <table>
         <tbody>
           {rows.map((row, i) =>
@@ -106,7 +142,6 @@ const STATUS_TONES: Record<string, { tone: Tone; label: string }> = {
   unchanged: { tone: "neutral", label: "Unchanged" },
   "live-changed": { tone: "info", label: "Changed on live" },
   "target-changed": { tone: "neutral", label: "Changed in copy" },
-  "staging-changed": { tone: "info", label: "Changed on staging" },
   "both-same": { tone: "neutral", label: "Same change" },
   "auto-merged": { tone: "success", label: "Auto-merged" },
   conflict: { tone: "critical", label: "Conflict" },
@@ -135,15 +170,15 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="ss-stat">
+    <div className="tm-stat">
       <strong>{value}</strong>
-      <span className="ss-muted">{label}</span>
+      <span className="tm-muted">{label}</span>
     </div>
   );
 }
 
 export function JsonBlock({ value }: { value: unknown }) {
-  return <pre className="ss-code">{value === undefined ? "(absent)" : JSON.stringify(value, null, 2)}</pre>;
+  return <pre className="tm-code">{value === undefined ? "(absent)" : JSON.stringify(value, null, 2)}</pre>;
 }
 
 export function formatDate(iso: string | Date | null | undefined): string {

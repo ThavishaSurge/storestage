@@ -49,12 +49,12 @@ describe("admin pages render", () => {
     const { default: Page } = await import("../../app/routes/app._index");
     const html = render(<Page />, {
       shop: "a.myshopify.com",
-      pair: { role: "staging", otherShop: "live.myshopify.com", clonedAt: now },
-      merges: [{ id: "m1", liveThemeName: "Dawn", targetThemeName: "Redesign", status: "ready", kind: "same-store", createdAt: now }],
-      promotions: [{ id: "p1", status: "done", createdAt: now }],
-      flags: { themeWrites: false, publishCreated: true },
+      merges: [{ id: "m1", liveThemeName: "Dawn", targetThemeName: "Redesign", status: "ready", createdAt: now }],
+      workingCopies: 2,
+      flags: { themeWrites: false },
     });
-    expect(html).toContain("live.myshopify.com");
+    expect(html).toContain("ThemeMerge");
+    expect(html).toContain("Redesign");
   });
 
   it("theme compare index (with and without baseline)", async () => {
@@ -76,7 +76,7 @@ describe("admin pages render", () => {
     const { default: Page } = await import("../../app/routes/app.themes.merge.$id._index");
     const merge = {
       id: "m1",
-      kind: "same-store",
+
       liveThemeName: "Dawn",
       targetThemeName: "Dawn redesign",
       liveShop: "a.myshopify.com",
@@ -102,14 +102,14 @@ describe("admin pages render", () => {
     // Undecided files: the full-theme zip would contain conflict markers, so it is blocked.
     expect(ready).toContain('title="Resolve every file first"');
     expect(render(<Page />, { merge: { ...merge, status: "analyzing" }, files: [], applyJob: null, writesEnabled: true })).toContain("Analyzing");
-    expect(render(<Page />, { merge: { ...merge, status: "applied", appliedAt: now, kind: "cross-store" }, files, applyJob: { id: "j2", status: "done", result: { themeName: "Dawn + staging" }, error: null }, writesEnabled: true })).toContain("Dawn + staging");
+    expect(render(<Page />, { merge: { ...merge, status: "applied", appliedAt: now }, files, applyJob: { id: "j2", status: "done", result: { themeName: "Dawn merged" }, error: null }, writesEnabled: true })).toContain("Dawn merged");
     expect(render(<Page />, { merge, files, applyJob: null, writesEnabled: true }, undefined, "filter=conflict")).toContain("assets/logo.png");
   });
 
   it("theme merge file page (json conflicts, text hunks, binary)", async () => {
     const { default: Page } = await import("../../app/routes/app.themes.merge.$id.file");
     const base = {
-      merge: { id: "m1", kind: "same-store", liveThemeName: "Dawn", targetThemeName: "Redesign", status: "ready" },
+      merge: { id: "m1", liveThemeName: "Dawn", targetThemeName: "Redesign", status: "ready" },
       diffs: { liveVsTarget: [{ type: "del", text: "a", oldNo: 1, newNo: null }, { type: "add", text: "b", oldNo: null, newNo: 1 }], baseVsLive: null, baseVsTarget: null, resultVsTarget: [] },
       resultBody: "{}",
     };
@@ -132,67 +132,5 @@ describe("admin pages render", () => {
       mergeData: null,
     });
     expect(binary).toContain("Binary assets");
-  });
-
-  it("staging: unpaired, code issued, paired", async () => {
-    const { default: Page } = await import("../../app/routes/app.staging._index");
-    expect(render(<Page />, { shop: "a.myshopify.com", pair: null, code: null })).toContain("Generate code");
-    expect(render(<Page />, { shop: "a.myshopify.com", pair: null, code: { code: "ABCD-EFGH", role: "live", expiresAt: now } })).toContain("ABCD-EFGH");
-    const paired = render(<Page />, {
-      shop: "s.myshopify.com",
-      code: null,
-      pair: { id: "p", role: "staging", stagingShop: "s.myshopify.com", liveShop: "l.myshopify.com", otherShop: "l.myshopify.com", clonedAt: now, baselineSnapshotId: "b" },
-      compares: [{ id: "c1", status: "ready", createdAt: now, jobId: "j", summary: { promotable: 4, byStatus: { conflict: 1 } } }],
-      promotions: [{ id: "pr1", status: "partial", createdAt: now, summary: { done: 3, failed: 1 } }],
-      cloneJob: { id: "j0", status: "done", error: null, createdAt: now, result: { copied: 10, failed: 1, unchanged: 2, failures: [{ type: "product", key: "x", error: "boom" }], theme: "Theme not copied" } },
-      baseline: [{ type: "product", count: 12 }],
-      writesEnabled: false,
-    });
-    expect(paired).toContain("Clone live → staging");
-    expect(paired).toContain("boom");
-  });
-
-  it("staging compare, item and promotion pages", async () => {
-    const pair = { id: "p", role: "staging", stagingShop: "s.myshopify.com", liveShop: "l.myshopify.com", otherShop: "l.myshopify.com", clonedAt: now, baselineSnapshotId: "b" };
-    const { default: Compare } = await import("../../app/routes/app.staging.compare.$id");
-    const items = [
-      { id: "i1", type: "product", key: "linen-shirt", title: "Linen shirt", status: "auto-merged", action: "update", selected: true, conflictCount: 0, undecided: 0 },
-      { id: "i2", type: "page", key: "about", title: "About", status: "conflict", action: "update", selected: true, conflictCount: 1, undecided: 1 },
-      { id: "i3", type: "metaobject", key: "designer/ana", title: "Ana", status: "live-changed", action: "none", selected: false, conflictCount: 0, undecided: 0 },
-    ];
-    const compareHtml = render(<Compare />, {
-      pair,
-      compare: { id: "c1", status: "ready", jobId: "j", createdAt: now },
-      summary: { themeMergeId: "m1", themeNote: null, settingsDiff: [{ key: "ianaTimezone", label: "Time zone", staging: "UTC", live: "Europe/Helsinki" }] },
-      themeMerge: { id: "m1", status: "ready", mode: "three-way", summary: { unresolved: 0, counts: { "target-changed": 2 } } },
-      items,
-    });
-    expect(compareHtml).toContain("Linen shirt");
-    expect(compareHtml).toContain("Europe/Helsinki");
-    expect(compareHtml).toContain("conflicts to decide");
-    expect(render(<Compare />, { pair, compare: { id: "c1", status: "running", jobId: "j", createdAt: now }, summary: null, themeMerge: null, items: [] })).toContain("Comparing stores");
-
-    const { default: Item } = await import("../../app/routes/app.staging.item.$id");
-    expect(
-      render(<Item />, {
-        pair,
-        item: { id: "i2", compareId: "c1", type: "page", key: "about", title: "About", status: "conflict", action: "update", selected: true },
-        conflicts: [{ path: ["body"], id: "body", base: "<p>a</p>", left: "<p>client</p>", right: "<p>staging</p>", kind: "value" }],
-        decisions: {},
-        willChangeLive: [],
-        stagingChanges: [],
-        liveChanges: [],
-      }),
-    ).toContain("Keep live");
-
-    const { default: Promotion } = await import("../../app/routes/app.staging.promotion.$id");
-    expect(
-      render(<Promotion />, {
-        pair,
-        promotion: { id: "pr1", compareId: "c1", status: "done", jobId: "j", createdAt: now, finishedAt: now },
-        items: [{ id: "x", type: "product", key: "linen-shirt", title: "Linen shirt", action: "update", status: "done", error: null }],
-        rollbackJob: null,
-      }),
-    ).toContain("Roll back");
   });
 });

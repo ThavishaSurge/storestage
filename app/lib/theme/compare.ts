@@ -359,29 +359,3 @@ export function summarize(plans: Pick<FilePlan, "status" | "resolved">[]) {
   return { counts, unresolved, total: plans.length };
 }
 
-/**
- * Cross-store variant: the result is applied on top of a fresh copy of the LIVE theme, so the
- * writes are computed relative to the live content instead of the target's.
- *   keep   -> target (staging) version wins   -> write target body (or delete if absent)
- *   live   -> live version stays              -> nothing to write
- *   merged -> merged result                   -> write result
- *   delete -> remove from live                -> delete
- */
-export function buildPromotePlan(files: (ResolvedFile & { presence: Presence })[]): WritePlan {
-  const upserts: WritePlan["upserts"] = [];
-  const deletes: string[] = [];
-  for (const f of files) {
-    if (f.resolution === "keep") {
-      if (f.presence.target && f.targetBody !== null) {
-        if (f.targetBody !== f.liveBody) upserts.push({ filename: f.filename, body: f.targetBody, encoding: f.encoding ?? "text" });
-      } else if (!f.presence.target && f.presence.live) {
-        deletes.push(f.filename);
-      }
-    } else if (f.resolution === "merged" && f.resultBody !== null && f.resultBody !== f.liveBody) {
-      upserts.push({ filename: f.filename, body: f.resultBody, encoding: "text" });
-    } else if (f.resolution === "delete" && f.presence.live) {
-      deletes.push(f.filename);
-    }
-  }
-  return { upserts, deletes };
-}

@@ -6,7 +6,7 @@ Attach a short screen recording of Theme Compare: pick two themes, review confli
 
 ---
 
-**App name:** StoreStage
+**App name:** ThemeMerge
 
 **Scopes / APIs requested:** `write_themes` — `themeFilesUpsert`, `themeFilesDelete`, `themeDuplicate`
 
@@ -14,16 +14,16 @@ Attach a short screen recording of Theme Compare: pick two themes, review confli
 
 **Use case**
 
-StoreStage is a staging and merge tool for theme developers and agencies. A common situation: an agency duplicates a
+ThemeMerge is a theme merge tool for theme developers and agencies. A common situation: an agency duplicates a
 merchant's live theme to build a redesign while the merchant keeps editing the live theme in the theme editor. When the
 redesign is ready, publishing it would silently discard the merchant's edits.
 
-StoreStage compares the two themes against a snapshot taken when the copy was made, merges theme-editor JSON key by key
+ThemeMerge compares the two themes against a snapshot taken when the copy was made, merges theme-editor JSON key by key
 and Liquid/CSS/JS line by line, and shows the merchant or developer every conflict to decide. It then writes the merged
 files into the **unpublished working copy**, so nothing the merchant changed is lost when they publish it.
 
-For agencies with a staging store, StoreStage promotes theme changes from staging to live by duplicating the live theme
-and writing the merged files into the duplicate. The merchant previews and publishes it themselves.
+Alternatively ThemeMerge duplicates the working copy and writes the merged result into the duplicate, so the original
+copy is left untouched. The merchant previews and publishes the result themselves.
 
 **Why theme app extensions don't fit**
 

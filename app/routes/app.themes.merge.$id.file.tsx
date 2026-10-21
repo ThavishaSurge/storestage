@@ -32,7 +32,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     file.resolution === "live" ? file.liveBody : file.resolution === "merged" ? file.resultBody : file.resolution === "delete" ? null : file.targetBody;
 
   return {
-    merge: { id: merge.id, kind: merge.kind, liveThemeName: merge.liveThemeName, targetThemeName: merge.targetThemeName, status: merge.status },
+    merge: { id: merge.id, liveThemeName: merge.liveThemeName, targetThemeName: merge.targetThemeName, status: merge.status },
     file: {
       filename: file.filename,
       kind: file.kind,
@@ -88,9 +88,8 @@ export default function FilePage() {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const [tab, setTab] = useState<string>(mergeData ? "conflicts" : "diff");
   const [editing, setEditing] = useState(false);
-  const crossStore = merge.kind === "cross-store";
   const leftName = `Live (${merge.liveThemeName})`;
-  const rightName = `${crossStore ? "Staging" : "Working copy"} (${merge.targetThemeName})`;
+  const rightName = `Working copy (${merge.targetThemeName})`;
   const locked = merge.status === "applied";
 
   const submit = (fields: Record<string, string>) => fetcher.submit({ filename: file.filename, ...fields }, { method: "post" });
@@ -105,26 +104,26 @@ export default function FilePage() {
   return (
     <s-page heading={file.filename}>
       <s-section>
-        <div className="ss-row" style={{ justifyContent: "space-between" }}>
-          <div className="ss-col">
-            <div className="ss-row">
+        <div className="tm-row" style={{ justifyContent: "space-between" }}>
+          <div className="tm-col">
+            <div className="tm-row">
               <StatusBadge status={file.status} />
               {!file.resolved && <s-badge tone="warning">Needs decision</s-badge>}
-              <span className="ss-muted">{file.reason}</span>
+              <span className="tm-muted">{file.reason}</span>
             </div>
             <Link to={`/app/themes/merge/${merge.id}`}>← Back to all files</Link>
           </div>
-          <div className="ss-row">
-            <span className="ss-muted">Result:</span>
+          <div className="tm-row">
+            <span className="tm-muted">Result:</span>
             {(["keep", "live", ...(mergeData ? ["merged"] : []), "delete"] as const).map((r) => (
               <button
                 key={r}
                 type="button"
                 disabled={locked || (r === "live" && !file.presence.live)}
-                className={`ss-btn ss-btn--small ${file.resolution === r ? "ss-btn--active" : ""}`}
+                className={`tm-btn tm-btn--small ${file.resolution === r ? "tm-btn--active" : ""}`}
                 onClick={() => submit({ intent: "resolution", resolution: r })}
               >
-                {r === "keep" ? (crossStore ? "Staging version" : "Copy version") : r === "live" ? "Live version" : r === "merged" ? "Merged" : "Delete"}
+                {r === "keep" ? "Copy version" : r === "live" ? "Live version" : r === "merged" ? "Merged" : "Delete"}
               </button>
             ))}
           </div>
@@ -144,11 +143,11 @@ export default function FilePage() {
         </s-section>
       ) : (
         <s-section>
-          <div className="ss-tabs" style={{ marginBottom: 12 }}>
+          <div className="tm-tabs" style={{ marginBottom: 12 }}>
             {tabs
               .filter((t) => t.show)
               .map((t) => (
-                <button key={t.id} type="button" className={`ss-btn ss-btn--small ${tab === t.id ? "ss-btn--active" : ""}`} onClick={() => setTab(t.id)}>
+                <button key={t.id} type="button" className={`tm-btn tm-btn--small ${tab === t.id ? "tm-btn--active" : ""}`} onClick={() => setTab(t.id)}>
                   {t.label}
                 </button>
               ))}
@@ -159,49 +158,49 @@ export default function FilePage() {
           )}
 
           {tab === "diff" && diffs && (
-            <div className="ss-col">
-              <span className="ss-muted">
-                Red = live, green = {crossStore ? "staging" : "working copy"}.
+            <div className="tm-col">
+              <span className="tm-muted">
+                Red = live, green = working copy.
               </span>
-              {diffs.liveVsTarget ? <DiffView rows={diffs.liveVsTarget} empty="Identical" /> : <span className="ss-muted">File too large to diff in the browser.</span>}
+              {diffs.liveVsTarget ? <DiffView rows={diffs.liveVsTarget} empty="Identical" /> : <span className="tm-muted">File too large to diff in the browser.</span>}
             </div>
           )}
 
           {tab === "base" && diffs && (
-            <div className="ss-col">
+            <div className="tm-col">
               <s-heading>Changed on live since the baseline</s-heading>
-              {diffs.baseVsLive ? <DiffView rows={diffs.baseVsLive} empty="No changes on live" /> : <span className="ss-muted">Not available</span>}
-              <s-heading>Changed in the {crossStore ? "staging theme" : "working copy"} since the baseline</s-heading>
-              {diffs.baseVsTarget ? <DiffView rows={diffs.baseVsTarget} empty="No changes in the copy" /> : <span className="ss-muted">Not available</span>}
+              {diffs.baseVsLive ? <DiffView rows={diffs.baseVsLive} empty="No changes on live" /> : <span className="tm-muted">Not available</span>}
+              <s-heading>Changed in the working copy since the baseline</s-heading>
+              {diffs.baseVsTarget ? <DiffView rows={diffs.baseVsTarget} empty="No changes in the copy" /> : <span className="tm-muted">Not available</span>}
             </div>
           )}
 
           {tab === "result" && diffs && (
-            <div className="ss-col">
-              <div className="ss-row" style={{ justifyContent: "space-between" }}>
-                <span className="ss-muted">
-                  {file.resolution === "delete" ? "The file will be deleted." : `How the file will change compared with the ${crossStore ? "staging theme" : "working copy"}.`}
+            <div className="tm-col">
+              <div className="tm-row" style={{ justifyContent: "space-between" }}>
+                <span className="tm-muted">
+                  {file.resolution === "delete" ? "The file will be deleted." : "How the file will change compared with the working copy."}
                   {diffs.resultVsTarget && ` ${diffStats(diffs.resultVsTarget).added} added, ${diffStats(diffs.resultVsTarget).removed} removed.`}
                 </span>
                 {!locked && (
-                  <button className="ss-btn ss-btn--small" type="button" onClick={() => setEditing((e) => !e)}>
+                  <button className="tm-btn tm-btn--small" type="button" onClick={() => setEditing((e) => !e)}>
                     {editing ? "Cancel editing" : "Edit result by hand"}
                   </button>
                 )}
               </div>
               {editing ? (
-                <fetcher.Form method="post" className="ss-col" onSubmit={() => setEditing(false)}>
+                <fetcher.Form method="post" className="tm-col" onSubmit={() => setEditing(false)}>
                   <input type="hidden" name="intent" value="custom" />
                   <input type="hidden" name="filename" value={file.filename} />
-                  <textarea className="ss-textarea" name="content" defaultValue={resultBody} spellCheck={false} />
+                  <textarea className="tm-textarea" name="content" defaultValue={resultBody} spellCheck={false} />
                   <div>
-                    <button className="ss-btn ss-btn--primary" type="submit">
+                    <button className="tm-btn tm-btn--primary" type="submit">
                       Save as result
                     </button>
                   </div>
                 </fetcher.Form>
               ) : diffs.resultVsTarget ? (
-                <DiffView rows={diffs.resultVsTarget} empty={`Same as the ${crossStore ? "staging theme" : "working copy"}`} />
+                <DiffView rows={diffs.resultVsTarget} empty="Same as the working copy" />
               ) : null}
             </div>
           )}
@@ -238,8 +237,8 @@ function Decisions({
   }
 
   return (
-    <div className="ss-col">
-      <div className="ss-row" style={{ justifyContent: "space-between" }}>
+    <div className="tm-col">
+      <div className="tm-row" style={{ justifyContent: "space-between" }}>
         <span>
           <strong>
             {decided}/{total}
@@ -247,11 +246,11 @@ function Decisions({
           decided. {data.mode === "json" ? "Theme-editor settings that both sides changed:" : "Code both sides changed:"}
         </span>
         {!locked && (
-          <div className="ss-row">
-            <button className="ss-btn ss-btn--small" type="button" onClick={() => onAll("left")}>
+          <div className="tm-row">
+            <button className="tm-btn tm-btn--small" type="button" onClick={() => onAll("left")}>
               All live
             </button>
-            <button className="ss-btn ss-btn--small" type="button" onClick={() => onAll("right")}>
+            <button className="tm-btn tm-btn--small" type="button" onClick={() => onAll("right")}>
               All copy
             </button>
           </div>
@@ -262,25 +261,25 @@ function Decisions({
         ? data.conflicts.map((c) => {
             const decision = data.decisions[c.id];
             return (
-              <div key={c.id} className={`ss-hunk ${decision ? "ss-hunk--decided" : ""}`}>
-                <div className="ss-hunk__head">
-                  <span className="ss-mono ss-break">{c.id}</span>
-                  <span className="ss-muted">{c.kind === "delete-modify" ? "Deleted on one side, changed on the other" : c.kind === "order" ? "Re-ordered differently" : "Changed on both sides"}</span>
+              <div key={c.id} className={`tm-hunk ${decision ? "tm-hunk--decided" : ""}`}>
+                <div className="tm-hunk__head">
+                  <span className="tm-mono tm-break">{c.id}</span>
+                  <span className="tm-muted">{c.kind === "delete-modify" ? "Deleted on one side, changed on the other" : c.kind === "order" ? "Re-ordered differently" : "Changed on both sides"}</span>
                   <DecisionButtons locked={locked} current={typeof decision === "string" ? decision : undefined} onPick={(d) => onDecide(c.id, d)} text={false} />
                 </div>
-                <div className="ss-hunk__sides">
-                  <div className="ss-hunk__side">
-                    <div className="ss-hunk__label">{leftName}</div>
+                <div className="tm-hunk__sides">
+                  <div className="tm-hunk__side">
+                    <div className="tm-hunk__label">{leftName}</div>
                     <JsonBlock value={c.left} />
                   </div>
-                  <div className="ss-hunk__side">
-                    <div className="ss-hunk__label">{rightName}</div>
+                  <div className="tm-hunk__side">
+                    <div className="tm-hunk__label">{rightName}</div>
                     <JsonBlock value={c.right} />
                   </div>
                 </div>
                 {c.base !== undefined && (
                   <details style={{ padding: "4px 8px" }}>
-                    <summary className="ss-muted">Original value</summary>
+                    <summary className="tm-muted">Original value</summary>
                     <JsonBlock value={c.base} />
                   </details>
                 )}
@@ -293,19 +292,19 @@ function Decisions({
             const context = before && before.type === "ok" ? before.lines.slice(-3).join("") : "";
             const decision = data.decisions[r.id];
             return (
-              <div key={r.id} className={`ss-hunk ${decision ? "ss-hunk--decided" : ""}`}>
-                <div className="ss-hunk__head">
-                  <span className="ss-muted">Hunk {r.id + 1}</span>
+              <div key={r.id} className={`tm-hunk ${decision ? "tm-hunk--decided" : ""}`}>
+                <div className="tm-hunk__head">
+                  <span className="tm-muted">Hunk {r.id + 1}</span>
                   <DecisionButtons locked={locked} current={typeof decision === "string" ? decision : undefined} onPick={(d) => onDecide(String(r.id), d)} text />
                 </div>
-                {context && <pre className="ss-context">{context}</pre>}
-                <div className="ss-hunk__sides">
-                  <div className="ss-hunk__side">
-                    <div className="ss-hunk__label">{leftName}</div>
+                {context && <pre className="tm-context">{context}</pre>}
+                <div className="tm-hunk__sides">
+                  <div className="tm-hunk__side">
+                    <div className="tm-hunk__label">{leftName}</div>
                     <pre>{r.left.join("") || "(nothing)"}</pre>
                   </div>
-                  <div className="ss-hunk__side">
-                    <div className="ss-hunk__label">{rightName}</div>
+                  <div className="tm-hunk__side">
+                    <div className="tm-hunk__label">{rightName}</div>
                     <pre>{r.right.join("") || "(nothing)"}</pre>
                   </div>
                 </div>
@@ -329,14 +328,14 @@ function DecisionButtons({ current, onPick, text, locked }: { current?: string; 
         ["right", "Copy"],
       ];
   return (
-    <div className="ss-row">
+    <div className="tm-row">
       {options.map(([value, label]) => (
-        <button key={value} type="button" disabled={locked} className={`ss-btn ss-btn--small ${current === value ? "ss-btn--active" : ""}`} onClick={() => onPick(value)}>
+        <button key={value} type="button" disabled={locked} className={`tm-btn tm-btn--small ${current === value ? "tm-btn--active" : ""}`} onClick={() => onPick(value)}>
           {label}
         </button>
       ))}
       {current && !locked && (
-        <button type="button" className="ss-btn ss-btn--small" onClick={() => onPick("clear")}>
+        <button type="button" className="tm-btn tm-btn--small" onClick={() => onPick("clear")}>
           Undo
         </button>
       )}

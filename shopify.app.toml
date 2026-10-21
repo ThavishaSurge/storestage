@@ -1,8 +1,8 @@
-# StoreStage — Shopify app configuration.
+# ThemeMerge — Shopify app configuration.
 # Run `npm run config:link` to link this file to your app in the Partner / Dev Dashboard;
 # the CLI fills in client_id, name, application_url and redirect URLs.
 client_id = "47e6063c0a7f1580cdfcc45b0232763b"
-name = "StoreStage"
+name = "ThemeMerge"
 application_url = "https://storestage-production.up.railway.app"
 embedded = true
 
@@ -23,7 +23,7 @@ automatically_update_urls_on_dev = false
 # write_themes: theme WRITES (themeFilesUpsert / themeFilesDelete) additionally need Shopify's
 # "Online Store Protected Scope Exemption". Reading theme files works without it.
 # The app keeps all theme writes behind THEME_WRITES_ENABLED until the exemption is granted.
-scopes = "read_themes,write_themes,read_products,write_products,read_content,write_content,read_online_store_navigation,write_online_store_navigation,read_files,write_files,read_metaobjects,write_metaobjects,read_metaobject_definitions,write_metaobject_definitions,read_publications,write_publications"
+scopes = "read_themes,write_themes"
 
 [webhooks]
 api_version = "2026-10"

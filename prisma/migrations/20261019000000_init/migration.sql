@@ -85,10 +85,6 @@ CREATE TABLE "ThemeLink" (
 CREATE TABLE "ThemeMerge" (
     "id" TEXT NOT NULL,
     "shop" TEXT NOT NULL,
-    "kind" TEXT NOT NULL DEFAULT 'same-store',
-    "liveShop" TEXT NOT NULL,
-    "targetShop" TEXT NOT NULL,
-    "pairId" TEXT,
     "liveThemeId" TEXT NOT NULL,
     "liveThemeName" TEXT NOT NULL,
     "targetThemeId" TEXT NOT NULL,
@@ -128,122 +124,6 @@ CREATE TABLE "ThemeMergeFile" (
     CONSTRAINT "ThemeMergeFile_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "PairingCode" (
-    "code" TEXT NOT NULL,
-    "shop" TEXT NOT NULL,
-    "role" TEXT NOT NULL,
-    "expiresAt" TIMESTAMP(3) NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PairingCode_pkey" PRIMARY KEY ("code")
-);
-
--- CreateTable
-CREATE TABLE "StorePair" (
-    "id" TEXT NOT NULL,
-    "stagingShop" TEXT NOT NULL,
-    "liveShop" TEXT NOT NULL,
-    "baselineSnapshotId" TEXT,
-    "clonedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "StorePair_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "StoreSnapshot" (
-    "id" TEXT NOT NULL,
-    "pairId" TEXT NOT NULL,
-    "kind" TEXT NOT NULL,
-    "shop" TEXT NOT NULL,
-    "resourceTypes" TEXT NOT NULL,
-    "themeSnapshotId" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "StoreSnapshot_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "StoreSnapshotItem" (
-    "id" TEXT NOT NULL,
-    "snapshotId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "key" TEXT NOT NULL,
-    "gid" TEXT,
-    "title" TEXT NOT NULL,
-    "data" TEXT NOT NULL,
-    "transfer" TEXT,
-
-    CONSTRAINT "StoreSnapshotItem_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "StoreCompare" (
-    "id" TEXT NOT NULL,
-    "pairId" TEXT NOT NULL,
-    "jobId" TEXT,
-    "baselineId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'running',
-    "summary" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "StoreCompare_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "StoreCompareItem" (
-    "id" TEXT NOT NULL,
-    "compareId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "key" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "action" TEXT NOT NULL,
-    "selected" BOOLEAN NOT NULL DEFAULT false,
-    "conflicts" TEXT,
-    "decisions" TEXT,
-    "baseData" TEXT,
-    "stagingData" TEXT,
-    "liveData" TEXT,
-    "mergedData" TEXT,
-    "transfer" TEXT,
-
-    CONSTRAINT "StoreCompareItem_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "Promotion" (
-    "id" TEXT NOT NULL,
-    "pairId" TEXT NOT NULL,
-    "compareId" TEXT NOT NULL,
-    "jobId" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'queued',
-    "prepushSnapshotId" TEXT,
-    "summary" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "finishedAt" TIMESTAMP(3),
-
-    CONSTRAINT "Promotion_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "PromotionItem" (
-    "id" TEXT NOT NULL,
-    "promotionId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "key" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "action" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'pending',
-    "error" TEXT,
-    "liveGid" TEXT,
-    "createdGid" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "PromotionItem_pkey" PRIMARY KEY ("id")
-);
-
 -- CreateIndex
 CREATE INDEX "Job_status_createdAt_idx" ON "Job"("status", "createdAt");
 
@@ -265,39 +145,9 @@ CREATE INDEX "ThemeMerge_shop_createdAt_idx" ON "ThemeMerge"("shop", "createdAt"
 -- CreateIndex
 CREATE UNIQUE INDEX "ThemeMergeFile_mergeId_filename_key" ON "ThemeMergeFile"("mergeId", "filename");
 
--- CreateIndex
-CREATE UNIQUE INDEX "StorePair_stagingShop_key" ON "StorePair"("stagingShop");
-
--- CreateIndex
-CREATE INDEX "StorePair_liveShop_idx" ON "StorePair"("liveShop");
-
--- CreateIndex
-CREATE INDEX "StoreSnapshot_pairId_kind_createdAt_idx" ON "StoreSnapshot"("pairId", "kind", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "StoreSnapshotItem_snapshotId_type_key_key" ON "StoreSnapshotItem"("snapshotId", "type", "key");
-
--- CreateIndex
-CREATE INDEX "StoreCompare_pairId_createdAt_idx" ON "StoreCompare"("pairId", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "StoreCompareItem_compareId_type_key_key" ON "StoreCompareItem"("compareId", "type", "key");
-
--- CreateIndex
-CREATE INDEX "Promotion_pairId_createdAt_idx" ON "Promotion"("pairId", "createdAt");
-
 -- AddForeignKey
 ALTER TABLE "ThemeSnapshotFile" ADD CONSTRAINT "ThemeSnapshotFile_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "ThemeSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ThemeMergeFile" ADD CONSTRAINT "ThemeMergeFile_mergeId_fkey" FOREIGN KEY ("mergeId") REFERENCES "ThemeMerge"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "StoreSnapshotItem" ADD CONSTRAINT "StoreSnapshotItem_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "StoreSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "StoreCompareItem" ADD CONSTRAINT "StoreCompareItem_compareId_fkey" FOREIGN KEY ("compareId") REFERENCES "StoreCompare"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PromotionItem" ADD CONSTRAINT "PromotionItem_promotionId_fkey" FOREIGN KEY ("promotionId") REFERENCES "Promotion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

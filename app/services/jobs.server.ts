@@ -24,7 +24,7 @@ export function registerJobHandler(type: string, handler: JobHandler) {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __storestageWorker: { started: boolean; busy: boolean; timer?: ReturnType<typeof setInterval> } | undefined;
+  var __thememergeWorker: { started: boolean; busy: boolean; timer?: ReturnType<typeof setInterval> } | undefined;
 }
 
 export async function enqueueJob(shop: string, type: string, payload: Record<string, unknown>): Promise<string> {
@@ -50,15 +50,15 @@ export async function getJob(id: string, shop: string) {
 }
 
 export function ensureWorker() {
-  if (globalThis.__storestageWorker?.started) return;
-  globalThis.__storestageWorker = { started: true, busy: false };
+  if (globalThis.__thememergeWorker?.started) return;
+  globalThis.__thememergeWorker = { started: true, busy: false };
   // Re-queue jobs interrupted by a restart.
   void db.job.updateMany({ where: { status: "running" }, data: { status: "queued", message: "Restarted after interruption" } });
-  globalThis.__storestageWorker.timer = setInterval(() => void tick(), 2000);
+  globalThis.__thememergeWorker.timer = setInterval(() => void tick(), 2000);
 }
 
 async function tick() {
-  const worker = globalThis.__storestageWorker;
+  const worker = globalThis.__thememergeWorker;
   if (!worker || worker.busy) return;
   worker.busy = true;
   try {

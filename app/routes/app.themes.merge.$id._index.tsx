@@ -27,11 +27,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   return {
     merge: {
       id: merge.id,
-      kind: merge.kind,
       liveThemeName: merge.liveThemeName,
       targetThemeName: merge.targetThemeName,
-      liveShop: merge.liveShop,
-      targetShop: merge.targetShop,
       mode: merge.mode,
       status: merge.status,
       jobId: merge.jobId,
@@ -88,13 +85,12 @@ export default function MergePage() {
   const action = useFetcher<{ ok?: boolean; jobId?: string; error?: string }>();
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const crossStore = merge.kind === "cross-store";
   const unresolved = files.filter((f) => !f.resolved).length;
   const defaultFilter = unresolved ? "attention" : "all";
   const filterId = params.get("filter") ?? defaultFilter;
   const filter = FILTERS.find((f) => f.id === filterId) ?? FILTERS[1];
   const visible = files.filter(filter.match);
-  const sideLabel = crossStore ? "staging" : "working copy";
+  const sideLabel = "working copy";
   const jobId = action.data?.jobId ?? (applyJob && ["queued", "running"].includes(applyJob.status) ? applyJob.id : null);
   const applyDisabled = !writesEnabled || unresolved > 0 || merge.status !== "ready" || Boolean(jobId);
   const applyBlockedReason = !writesEnabled ? "Theme writes are disabled" : unresolved ? "Resolve every file first" : "";
@@ -127,27 +123,24 @@ export default function MergePage() {
   return (
     <s-page heading={`${merge.liveThemeName} → ${merge.targetThemeName}`}>
       <s-section>
-        <div className="ss-row" style={{ justifyContent: "space-between" }}>
-          <div className="ss-col">
-            <div className="ss-row">
+        <div className="tm-row" style={{ justifyContent: "space-between" }}>
+          <div className="tm-col">
+            <div className="tm-row">
               <StatusBadge status={merge.status} />
               <s-badge tone={merge.mode === "three-way" ? "success" : "info"}>{merge.mode}</s-badge>
-              {crossStore && <s-badge tone="info">staging → live</s-badge>}
             </div>
-            <span className="ss-muted">
-              {crossStore
-                ? `Live theme on ${merge.liveShop}, staging theme on ${merge.targetShop}.`
-                : merge.mode === "heuristic" && merge.forkTime
-                  ? `Changes attributed by timestamp; working copy created ${formatDate(merge.forkTime)}.`
-                  : `Compared ${formatDate(merge.createdAt)}.`}
+            <span className="tm-muted">
+              {merge.mode === "heuristic" && merge.forkTime
+                ? `Changes attributed by timestamp; working copy created ${formatDate(merge.forkTime)}.`
+                : `Compared ${formatDate(merge.createdAt)}.`}
             </span>
           </div>
-          <div className="ss-row">
-            <button className="ss-btn" type="button" onClick={() => download(false)} disabled={downloading || merge.status === "failed"}>
+          <div className="tm-row">
+            <button className="tm-btn" type="button" onClick={() => download(false)} disabled={downloading || merge.status === "failed"}>
               {downloading ? "Preparing…" : "Download changed files"}
             </button>
             <button
-              className="ss-btn"
+              className="tm-btn"
               type="button"
               onClick={() => download(true)}
               disabled={downloading || unresolved > 0 || merge.status !== "ready"}
@@ -155,29 +148,27 @@ export default function MergePage() {
             >
               {downloading ? "Preparing…" : "Download full theme"}
             </button>
-            <action.Form method="post" className="ss-row">
+            <action.Form method="post" className="tm-row">
               <input type="hidden" name="intent" value="apply" />
-              {!crossStore && (
-                <button
-                  className="ss-btn"
-                  type="submit"
-                  name="applyMode"
-                  value="new-copy"
-                  disabled={applyDisabled}
-                  title={applyBlockedReason || "Duplicates the working copy and writes the merged result into the duplicate"}
-                >
-                  Create merged theme
-                </button>
-              )}
               <button
-                className="ss-btn ss-btn--primary"
+                className="tm-btn"
+                type="submit"
+                name="applyMode"
+                value="new-copy"
+                disabled={applyDisabled}
+                title={applyBlockedReason || "Duplicates the working copy and writes the merged result into the duplicate"}
+              >
+                Create merged theme
+              </button>
+              <button
+                className="tm-btn tm-btn--primary"
                 type="submit"
                 name="applyMode"
                 value="in-place"
                 disabled={applyDisabled}
                 title={applyBlockedReason}
               >
-                {crossStore ? "Create merged copy on live" : "Apply to working copy"}
+                Apply to working copy
               </button>
             </action.Form>
           </div>
@@ -207,11 +198,9 @@ export default function MergePage() {
         {merge.status === "applied" && (
           <s-banner tone="success" heading="Applied">
             <s-paragraph>
-              {crossStore
-                ? `Merged copy created on the live store${applyJob?.result?.themeName ? ` as "${String(applyJob.result.themeName)}"` : ""}. Preview it in Online Store → Themes, then publish.`
-                : applyJob?.result?.themeName
-                  ? `Merged theme created as "${String(applyJob.result.themeName)}", with the working copy left untouched. Preview it in Online Store → Themes, then publish.`
-                  : `The working copy now contains the client's live changes. Preview it, then publish it from Online Store → Themes.`}{" "}
+              {applyJob?.result?.themeName
+                ? `Merged theme created as "${String(applyJob.result.themeName)}", with the working copy left untouched. Preview it in Online Store → Themes, then publish.`
+                : `The working copy now contains the client's live changes. Preview it, then publish it from Online Store → Themes.`}{" "}
               Applied {formatDate(merge.appliedAt)}.
             </s-paragraph>
           </s-banner>
@@ -228,7 +217,7 @@ export default function MergePage() {
         )}
 
         {merge.summary && (
-          <div className="ss-row" style={{ marginTop: 12 }}>
+          <div className="tm-row" style={{ marginTop: 12 }}>
             <Stat label="Need a decision" value={unresolved} />
             <Stat label="Changed on live" value={merge.summary.counts["live-changed"] ?? 0} />
             <Stat label={`Changed in ${sideLabel}`} value={merge.summary.counts["target-changed"] ?? 0} />
@@ -239,12 +228,12 @@ export default function MergePage() {
       </s-section>
 
       <s-section heading="Files">
-        <div className="ss-tabs" style={{ marginBottom: 12 }}>
+        <div className="tm-tabs" style={{ marginBottom: 12 }}>
           {FILTERS.map((f) => (
             <button
               key={f.id}
               type="button"
-              className={`ss-btn ss-btn--small ${f.id === filter.id ? "ss-btn--active" : ""}`}
+              className={`tm-btn tm-btn--small ${f.id === filter.id ? "tm-btn--active" : ""}`}
               onClick={() => setParams((p) => {
                 p.set("filter", f.id);
                 return p;
@@ -255,14 +244,14 @@ export default function MergePage() {
           ))}
         </div>
         {visible.length === 0 ? (
-          <div className="ss-muted">Nothing here.</div>
+          <div className="tm-muted">Nothing here.</div>
         ) : (
-          <table className="ss-table">
+          <table className="tm-table">
             <thead>
               <tr>
                 <th>File</th>
                 <th>Status</th>
-                <th>Result in {crossStore ? "live copy" : "working copy"}</th>
+                <th>Result in working copy</th>
               </tr>
             </thead>
             <tbody>
@@ -294,15 +283,15 @@ function FileRow({
   const current = (fetcher.formData?.get("resolution") as string) ?? file.resolution;
   return (
     <tr>
-      <td className="ss-break">
-        <Link to={`/app/themes/merge/${mergeId}/file?f=${encodeURIComponent(file.filename)}`} className="ss-mono">
+      <td className="tm-break">
+        <Link to={`/app/themes/merge/${mergeId}/file?f=${encodeURIComponent(file.filename)}`} className="tm-mono">
           {file.filename}
         </Link>
-        <div className="ss-muted">{file.reason}</div>
+        <div className="tm-muted">{file.reason}</div>
         {fetcher.data?.error && <div style={{ color: "#8e1f0b", fontSize: 12 }}>{fetcher.data.error}</div>}
       </td>
-      <td className="ss-nowrap">
-        <div className="ss-col" style={{ gap: 4 }}>
+      <td className="tm-nowrap">
+        <div className="tm-col" style={{ gap: 4 }}>
           <StatusBadge status={file.status} />
           {!file.resolved && (
             <s-badge tone="warning">{file.conflictCount > 1 ? `${file.conflictCount} to decide` : "Decide"}</s-badge>
@@ -314,7 +303,7 @@ function FileRow({
           <input type="hidden" name="intent" value="resolution" />
           <input type="hidden" name="filename" value={file.filename} />
           <select
-            className="ss-select"
+            className="tm-select"
             name="resolution"
             value={current}
             disabled={pending || applied}

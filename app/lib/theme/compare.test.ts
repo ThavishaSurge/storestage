@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildPromotePlan,
   buildWritePlan,
   classifyFiles,
   mergeThemeFile,
@@ -162,20 +161,5 @@ describe("buildWritePlan / summarize", () => {
     expect(s.unresolved).toBe(1);
     expect(s.counts.conflict).toBe(1);
     expect(s.total).toBe(3);
-  });
-});
-
-describe("buildPromotePlan (cross-store)", () => {
-  it("writes staging changes on top of live", () => {
-    const plan = buildPromotePlan([
-      { filename: "a.liquid", resolution: "keep", targetBody: "staging", liveBody: "live", resultBody: null, presence: { base: true, live: true, target: true } },
-      { filename: "b.liquid", resolution: "live", targetBody: "staging", liveBody: "live", resultBody: null, presence: { base: true, live: true, target: true } },
-      { filename: "c.json", resolution: "merged", targetBody: "s", liveBody: "l", resultBody: "m", presence: { base: true, live: true, target: true } },
-      { filename: "removed-in-staging.liquid", resolution: "keep", targetBody: null, liveBody: "x", resultBody: null, presence: { base: true, live: true, target: false } },
-      { filename: "new.png", resolution: "keep", targetBody: "AAAA", liveBody: null, resultBody: null, encoding: "base64", presence: { base: false, live: false, target: true } },
-    ]);
-    expect(plan.upserts.map((u) => u.filename)).toEqual(["a.liquid", "c.json", "new.png"]);
-    expect(plan.upserts[2].encoding).toBe("base64");
-    expect(plan.deletes).toEqual(["removed-in-staging.liquid"]);
   });
 });

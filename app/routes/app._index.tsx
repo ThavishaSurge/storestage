@@ -3,85 +3,89 @@ import { Link, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { authenticate } from "../shopify.server";
-import { publishCreatedToOnlineStore, themeWritesEnabled } from "../services/flags.server";
-import { getPairForShop } from "../services/pairing.server";
-import { formatDate, StatusBadge } from "../components/ui";
+import { themeWritesEnabled } from "../services/flags.server";
+import { BrandLockup, formatDate, StatusBadge } from "../components/ui";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const pair = await getPairForShop(session.shop);
-  const [merges, promotions] = await Promise.all([
-    db.themeMerge.findMany({ where: { shop: session.shop }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, liveThemeName: true, targetThemeName: true, status: true, kind: true, createdAt: true } }),
-    pair ? db.promotion.findMany({ where: { pairId: pair.id }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, status: true, createdAt: true } }) : Promise.resolve([]),
+  const [merges, themeCount] = await Promise.all([
+    db.themeMerge.findMany({
+      where: { shop: session.shop },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, liveThemeName: true, targetThemeName: true, status: true, createdAt: true },
+    }),
+    db.themeLink.count({ where: { shop: session.shop } }),
   ]);
   return {
     shop: session.shop,
-    pair: pair ? { role: pair.role, otherShop: pair.otherShop, clonedAt: pair.clonedAt?.toISOString() ?? null } : null,
     merges: merges.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() })),
-    promotions: promotions.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() })),
-    flags: { themeWrites: themeWritesEnabled(), publishCreated: publishCreatedToOnlineStore() },
+    workingCopies: themeCount,
+    flags: { themeWrites: themeWritesEnabled() },
   };
 };
 
 export default function Overview() {
-  const { pair, merges, promotions, flags } = useLoaderData<typeof loader>();
+  const { merges, workingCopies, flags } = useLoaderData<typeof loader>();
   return (
-    <s-page heading="StoreStage">
-      <s-section heading="Theme Compare">
-        <s-paragraph>
-          The client edited the live theme while you worked on a copy? Compare the two, keep their edits, and publish your copy
-          without losing anything. Works on this store alone.
-        </s-paragraph>
-        <div style={{ marginTop: 8 }}>
-          <Link to="/app/themes">Open Theme Compare →</Link>
+    <s-page heading="ThemeMerge">
+      <s-section>
+        <div className="tm-hero">
+          <BrandLockup />
+          <h2 className="tm-hero__title">Publish your theme without losing the client&apos;s edits.</h2>
+          <p className="tm-hero__body">
+            They kept editing the live theme while you worked on a copy. ThemeMerge finds every file either side changed,
+            merges theme-editor JSON key by key and Liquid, CSS and JS line by line, and leaves only the real conflicts for
+            you to decide.
+          </p>
+          <div className="tm-row" style={{ marginTop: 16 }}>
+            <Link className="tm-btn tm-btn--primary" to="/app/themes">
+              Compare two themes
+            </Link>
+            {workingCopies > 0 && (
+              <span className="tm-muted">
+                {workingCopies} working {workingCopies === 1 ? "copy" : "copies"} with a recorded baseline
+              </span>
+            )}
+          </div>
         </div>
       </s-section>
 
-      <s-section heading="Staging">
-        <s-paragraph>
-          Pair a staging store with this one. Clone live into staging, make changes there, then review a three-way diff and promote only
-          the changes you approve — products, collections, pages, blogs, menus, redirects, files, metafield and metaobject definitions,
-          metaobjects, and the theme.
-        </s-paragraph>
-        <div className="ss-row" style={{ marginTop: 8 }}>
-          {pair ? (
-            <span>
-              Paired with <strong>{pair.otherShop}</strong> (this store is {pair.role}).{" "}
-              {pair.clonedAt ? `Baseline ${formatDate(pair.clonedAt)}.` : "No baseline yet."}
-            </span>
-          ) : (
-            <span className="ss-muted">Not paired.</span>
-          )}
-          <Link to="/app/staging">Open Staging →</Link>
-        </div>
+      <s-section heading="How it works">
+        <ol className="tm-steps">
+          <li>
+            <strong>Record a baseline.</strong> Duplicate the live theme from here, or record the baseline right after you
+            duplicate it yourself. That fork point is what makes the merge a true three-way merge.
+          </li>
+          <li>
+            <strong>Compare.</strong> Changed only on live → take live. Changed only in your copy → keep it. Changed on both →
+            merged automatically where possible, flagged as a conflict where not.
+          </li>
+          <li>
+            <strong>Decide.</strong> Resolve conflicts per file, per conflict, or by editing the result by hand.
+          </li>
+          <li>
+            <strong>Ship.</strong> Download the full merged theme and upload it as a new theme, or apply it straight to your
+            working copy. The live theme is never written.
+          </li>
+        </ol>
       </s-section>
 
-      {(merges.length > 0 || promotions.length > 0) && (
-        <s-section heading="Recent activity">
-          <table className="ss-table">
+      {merges.length > 0 && (
+        <s-section heading="Recent merges">
+          <table className="tm-table">
             <tbody>
               {merges.map((m) => (
                 <tr key={m.id}>
                   <td>
                     <Link to={`/app/themes/merge/${m.id}`}>
-                      Theme {m.kind === "cross-store" ? "promotion" : "merge"}: {m.liveThemeName} ← {m.targetThemeName}
+                      {m.liveThemeName} → {m.targetThemeName}
                     </Link>
                   </td>
                   <td>
                     <StatusBadge status={m.status} />
                   </td>
-                  <td className="ss-nowrap">{formatDate(m.createdAt)}</td>
-                </tr>
-              ))}
-              {promotions.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <Link to={`/app/staging/promotion/${p.id}`}>Promotion to live</Link>
-                  </td>
-                  <td>
-                    <StatusBadge status={p.status} />
-                  </td>
-                  <td className="ss-nowrap">{formatDate(p.createdAt)}</td>
+                  <td className="tm-nowrap">{formatDate(m.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
@@ -89,20 +93,16 @@ export default function Overview() {
         </s-section>
       )}
 
-      <s-section slot="aside" heading="Settings">
-        <div className="ss-col">
-          <div className="ss-row">
+      <s-section slot="aside" heading="Theme writes">
+        <div className="tm-col">
+          <div className="tm-row">
             <s-badge tone={flags.themeWrites ? "success" : "warning"}>{flags.themeWrites ? "On" : "Off"}</s-badge>
-            <span>Theme writes</span>
+            <span>{flags.themeWrites ? "ThemeMerge can write themes" : "Export only"}</span>
           </div>
-          <span className="ss-muted">
-            Writing theme files needs Shopify&apos;s Online Store protected-scope exemption. Until it&apos;s granted, compare and download the
-            merged files, then push them with Shopify CLI. Turn on with THEME_WRITES_ENABLED=true.
+          <span className="tm-muted">
+            Writing theme files needs Shopify&apos;s Online Store protected-scope exemption. Until it&apos;s granted, compare,
+            decide, then download the full merged theme and upload it under Online Store → Themes.
           </span>
-          <div className="ss-row">
-            <s-badge tone="info">{flags.publishCreated ? "On" : "Off"}</s-badge>
-            <span>Publish promoted new products/collections</span>
-          </div>
         </div>
       </s-section>
     </s-page>
